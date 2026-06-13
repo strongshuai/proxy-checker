@@ -1,0 +1,14 @@
+*** Begin Patch
+*** Update File: public/app.js
+@@ getRepoLink @@
+ function getRepoLink(){
+   var repo=loadRepo();
+   if(!repo.length){toast('仓库为空');return}
+   var proxies=repo.map(function(p){return p.proxy});
+-  var hash=0;
+-  proxies.forEach(function(p){for(var i=0;i<p.length;i++){hash=((hash<<5)-hash)+p.charCodeAt(i);hash|=0}});
+-  var token='repo'+Math.abs(hash).toString(36);
++  // Fixed: use static token so link never changes
++  var token='myrepo';
+   var btn=event.target;
+*** End Patch
