@@ -122,6 +122,13 @@ textarea::-webkit-scrollbar-thumb{background:rgba(124,92,252,.3);border-radius:3
 textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 /* Proxy count badge near textarea */
 .proxy-count-badge{background:rgba(124,92,252,.15);color:#a78bfa;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
+/* Vercel warning modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:1000;justify-content:center;align-items:center}
+.modal-overlay.show{display:flex}
+.modal-box{background:#1a1a3e;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:32px;max-width:440px;width:90%;text-align:center;box-shadow:0 16px 64px rgba(0,0,0,.5)}
+.modal-box h3{font-size:1.1rem;color:#eab308;margin-bottom:12px}
+.modal-box p{font-size:.9rem;color:#aaa;line-height:1.6;margin-bottom:20px}
+.modal-box .btn{margin:0 auto}
 </style>
 </head>
 <body>
@@ -249,6 +256,8 @@ textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 <div class="footer">
   <a href="https://linux.do" target="_blank">linux.do</a> · by <a href="https://linux.do/u/sq4537/summary" target="_blank">sq4537</a>
 </div>
+<div class="modal-overlay" id="vercelModal"><div class="modal-box"><h3>⚠️ Vercel 体验版提示</h3><p>Vercel 仅推荐用于测试体验，受限于 Serverless 架构，速度很慢，检测准确性也很低。<br><br>建议部署到自己的服务器以获得更快的检测速度和更准确的测试结果。</p><button class="btn btn-primary" onclick="document.getElementById('vercelModal').classList.remove('show')">我知道了</button></div></div>
+<script>if(window.location.hostname.endsWith('vercel.app'))document.getElementById('vercelModal').classList.add('show')</script>
 <script src="app.js"></script>
 </body>
 </html>
