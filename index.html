@@ -3,23 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ChatGPT 代理检测器 v3</title>
+<title>ChatGPT 代理检测器 v4</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f23;color:#e0e0e0;min-height:100vh}
-.header{background:linear-gradient(135deg,#1a1a3e 0%,#2d1b69 100%);padding:24px 32px;border-bottom:1px solid rgba(255,255,255,.08)}
-.header h1{font-size:1.6rem;color:#fff;margin-bottom:4px}
-.header p{font-size:.85rem;color:#8888aa}
-.container{max-width:1440px;margin:0 auto;padding:24px}
+.header{background:linear-gradient(135deg,#1a1a3e 0%,#2d1b69 100%);padding:16px 32px;border-bottom:1px solid rgba(255,255,255,.08)}
+.header h1{font-size:1.4rem;color:#fff;margin-bottom:2px}
+.header p{font-size:.8rem;color:#8888aa}
+.container{max-width:1440px;margin:0 auto;padding:20px 24px}
 .card{background:#16162e;border:1px solid rgba(255,255,255,.06);border-radius:12px;margin-bottom:20px}
-.card-head{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between}
+.card-head{padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between}
 .card-head h2{font-size:1rem;color:#ccc;font-weight:600}
-.card-body{padding:20px}
-textarea{width:100%;height:180px;padding:14px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e0e0e0;font-family:"Cascadia Code","Fira Code",Consolas,monospace;font-size:13px;resize:none;line-height:1.6}
+.card-body{padding:16px 20px}
+textarea{width:100%;height:160px;padding:12px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e0e0e0;font-family:"Cascadia Code","Fira Code",Consolas,monospace;font-size:13px;resize:none;line-height:1.6}
 textarea:focus{outline:none;border-color:#7c5cfc}
 textarea::placeholder{color:#555}
-.btn-row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
-.btn{padding:10px 20px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}.btn-row .btn,.btn-row .detect-main-btn,.btn-row .detect-arrow-btn,.btn-row .clear-checked-btn,.btn-row .fetch-btn{height:36px;min-height:36px}
+.btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
 .btn-primary{background:linear-gradient(135deg,#7c5cfc,#a855f7);color:#fff}
 .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(124,92,252,.4)}
 .btn-primary:disabled,.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
@@ -29,19 +29,14 @@ textarea::placeholder{color:#555}
 .btn-ghost:hover{background:rgba(255,255,255,.1);color:#fff}
 .btn-deep{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff}
 .btn-deep:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(245,158,11,.4)}
-/* Rounds select — match .btn height exactly */
-#roundsSelect{padding:10px 14px;border-radius:8px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);color:#e0e0e0;font-size:13px;font-weight:600;cursor:pointer;height:38px;appearance:auto}
+#roundsSelect{padding:0 12px;border-radius:8px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);color:#e0e0e0;font-size:13px;font-weight:600;cursor:pointer;height:36px;min-height:36px;appearance:auto}
 #roundsSelect:focus{outline:none;border-color:#7c5cfc}
-.stats-row{display:grid;grid-template-columns:repeat(8,1fr);gap:12px;margin-bottom:20px}
-@media(max-width:1100px){.stats-row{grid-template-columns:repeat(4,1fr)}}
-@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}}
-.stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:14px;text-align:center}
-.stat-num{font-size:1.6rem;font-weight:700;color:#7c5cfc}
-.stat-label{font-size:.7rem;color:#666;margin-top:4px}
-.results-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-@media(max-width:900px){.results-grid{grid-template-columns:1fr}}
-.filter-bar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-.fbtn{padding:5px 12px;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:transparent;color:#888;font-size:11px;cursor:pointer;transition:all .2s}
+.stats-row{display:flex;gap:6px;align-items:stretch;flex-wrap:nowrap}
+.stat{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 16px;text-align:center;min-width:72px}
+.stat-num{font-size:1.3rem;font-weight:800;color:#fff}
+.stat-label{font-size:.7rem;color:#999;margin-top:3px}
+.filter-bar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.fbtn{padding:4px 10px;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:transparent;color:#888;font-size:11px;cursor:pointer;transition:all .2s}
 .fbtn.active{border-color:#7c5cfc;color:#7c5cfc;background:rgba(124,92,252,.1)}
 .fbtn:hover{border-color:#7c5cfc;color:#aaa}
 .result-list{max-height:420px;overflow-y:auto}
@@ -77,7 +72,7 @@ textarea::placeholder{color:#555}
 .copy-btn:hover{background:rgba(124,92,252,.4)}
 .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-.footer{text-align:center;padding:20px;margin-top:10px;border-top:1px solid rgba(255,255,255,.06);color:#555;font-size:12px}
+.footer{text-align:center;padding:16px;margin-top:10px;border-top:1px solid rgba(255,255,255,.06);color:#555;font-size:12px}
 .footer a{color:#7c5cfc;text-decoration:none;transition:color .2s}
 .footer a:hover{color:#a78bfa}
 .detail-panel{display:none;margin-top:8px;padding:8px 12px;background:rgba(0,0,0,.3);border-radius:6px;font-size:11px;line-height:1.6;color:#888}
@@ -87,7 +82,7 @@ textarea::placeholder{color:#555}
 .cap-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
 .cap-ok{background:rgba(34,197,94,.15);color:#22c55e}
 .cap-no{background:rgba(239,68,68,.15);color:#ef4444}
-.gh-link{position:absolute;top:24px;right:32px;display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#aaa;text-decoration:none;font-size:12px;transition:all .2s}
+.gh-link{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#aaa;text-decoration:none;font-size:12px;transition:all .2s}
 .gh-link:hover{background:rgba(255,255,255,.12);color:#fff}
 .fetch-dropdown{position:relative;display:inline-flex}
 .fetch-btn{position:relative}
@@ -99,7 +94,6 @@ textarea::placeholder{color:#555}
 .fetch-menu-item .fetch-icon{font-size:14px}
 .fetch-menu-item .fetch-count{margin-left:auto;font-size:11px;color:#666}
 .fetch-loading{padding:12px 16px;color:#888;font-size:12px;text-align:center}
-/* Grade dropdown for "添加到我的仓库" */
 .grade-dropdown{position:relative;display:inline-flex}
 .grade-dropdown::after{content:'';position:absolute;top:100%;left:0;width:100%;height:4px}
 .grade-menu{display:none;position:absolute;top:100%;left:0;margin-top:2px;background:#1a1a3e;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 0;min-width:160px;z-index:50;box-shadow:0 8px 32px rgba(0,0,0,.5)}
@@ -107,11 +101,9 @@ textarea::placeholder{color:#555}
 .grade-menu-item{display:flex;align-items:center;gap:8px;padding:8px 16px;cursor:pointer;transition:background .15s;font-size:13px;color:#ccc;white-space:nowrap}
 .grade-menu-item:hover{background:rgba(124,92,252,.15);color:#fff}
 .grade-menu-item .grade-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-/* Textarea resize handle */
 .resize-handle{position:relative}
 .resize-handle::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:40px;height:6px;cursor:ns-resize;border-radius:3px 3px 0 0;background:rgba(255,255,255,.08);transition:background .2s}
 .resize-handle::after:hover{background:rgba(124,92,252,.4)}
-/* Global scrollbar styling */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:rgba(255,255,255,.03);border-radius:3px}
 ::-webkit-scrollbar-thumb{background:rgba(124,92,252,.3);border-radius:3px}
@@ -120,32 +112,75 @@ textarea::-webkit-scrollbar{width:6px}
 textarea::-webkit-scrollbar-track{background:rgba(255,255,255,.03);border-radius:3px}
 textarea::-webkit-scrollbar-thumb{background:rgba(124,92,252,.3);border-radius:3px}
 textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
-/* Proxy count badge near textarea */
 .proxy-count-badge{background:rgba(124,92,252,.15);color:#a78bfa;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
-/* Vercel warning modal */
-.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:1000;justify-content:center;align-items:center}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:1000;justify-content:center;align-items:center;animation:modalFadeIn .25s ease}
 .modal-overlay.show{display:flex}
-.modal-box{background:#1a1a3e;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:32px;max-width:440px;width:90%;text-align:center;box-shadow:0 16px 64px rgba(0,0,0,.5)}
-.modal-box h3{font-size:1.1rem;color:#eab308;margin-bottom:12px}
-.modal-box p{font-size:.9rem;color:#aaa;line-height:1.6;margin-bottom:20px}
-.modal-box .btn{margin:0 auto}
+@keyframes modalFadeIn{from{opacity:0}to{opacity:1}}
+.modal-box{background:linear-gradient(160deg,#1e1e3f 0%,#16162e 100%);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:36px 32px;max-width:420px;width:90%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 0 1px rgba(124,92,252,.08);animation:modalBoxIn .3s ease}
+@keyframes modalBoxIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px;background:linear-gradient(135deg,rgba(234,179,8,.15),rgba(234,179,8,.05));border:1px solid rgba(234,179,8,.2)}
+.modal-box h3{font-size:1.15rem;color:#fff;margin-bottom:10px;font-weight:700}
+.modal-box p{font-size:.85rem;color:#888;line-height:1.7;margin-bottom:24px}
+.modal-box .btn{min-width:140px}
+.detect-dropdown{position:relative;display:inline-flex}
+.detect-dropdown::after{content:'';position:absolute;top:100%;left:0;width:100%;height:4px}
+.detect-main-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:8px 0 0 8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;background:linear-gradient(135deg,#7c5cfc,#a855f7);color:#fff}
+.detect-main-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(124,92,252,.4)}
+.detect-main-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.detect-arrow-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;padding:8px 5px;border:none;border-radius:0 8px 8px 0;font-size:11px;cursor:pointer;transition:all .2s;background:linear-gradient(135deg,#6b4ce0,#9333ea);color:#fff;border-left:1px solid rgba(255,255,255,.15)}
+.detect-arrow-btn:hover{background:linear-gradient(135deg,#7c5cfc,#a855f7)}
+.detect-menu{display:none;position:absolute;top:100%;left:0;margin-top:2px;background:#1a1a3e;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 0;min-width:220px;z-index:50;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.detect-dropdown:hover .detect-menu,.detect-dropdown.open .detect-menu,.detect-menu:hover{display:block}
+.detect-menu-item{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;transition:background .15s;font-size:13px;color:#ccc;white-space:nowrap}
+.detect-menu-item:hover{background:rgba(124,92,252,.15);color:#fff}
+.detect-menu-item .detect-icon{font-size:14px}
+.detect-skip-badge{background:rgba(234,179,8,.15);color:#eab308;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:4px}
+.clear-checked-btn{padding:5px 12px;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:transparent;color:#888;font-size:11px;cursor:pointer;transition:all .2s}
+.clear-checked-btn:hover{border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,.1)}
+.result-tabs{display:flex;gap:0;align-items:stretch}
+.result-tab{padding:10px 20px;border:none;background:transparent;color:#666;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.result-tab:hover{color:#aaa}
+.result-tab.active{color:#7c5cfc;border-bottom-color:#7c5cfc;background:rgba(124,92,252,.05)}
+.result-tab .tab-count{background:rgba(124,92,252,.15);color:#a78bfa;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600}
+.tab-panel{display:none;min-height:380px}
+.tab-panel.active{display:block}
 </style>
 </head>
 <body>
-<div class="header" style="position:relative">
-<a class="gh-link" href="https://github.com/strongshuai/proxy-checker" target="_blank">&#128187; GitHub</a>
-<h1>&#128269; ChatGPT 代理检测器 v3</h1>
+
+<!-- Header with stats -->
+<div class="header">
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+<div>
+<h1>&#128269; ChatGPT 代理检测器 v4</h1>
 <p>多维度检测 &middot; CF绕过验证 &middot; 注册就绪检测 &middot; IP类型识别 &middot; Deep Check模式</p>
 </div>
+<div class="stats-row">
+<div class="stat"><div class="stat-num" id="sTotal">0</div><div class="stat-label">总计</div></div>
+<div class="stat"><div class="stat-num" id="sValid" style="color:#22c55e">0</div><div class="stat-label">稳定(2/2)</div></div>
+<div class="stat"><div class="stat-num" id="sUnstable" style="color:#eab308">0</div><div class="stat-label">不稳定(1/2)</div></div>
+<div class="stat"><div class="stat-num" id="sInvalid" style="color:#ef4444">0</div><div class="stat-label">失效</div></div>
+<div class="stat"><div class="stat-num" id="sCfBypass" style="color:#10b981">0</div><div class="stat-label">CF绕过</div></div>
+<div class="stat"><div class="stat-num" id="sRegReady" style="color:#60a5fa">0</div><div class="stat-label">可注册</div></div>
+<div class="stat"><div class="stat-num" id="sRate" style="color:#eab308">0%</div><div class="stat-label">稳定率</div></div>
+<div class="stat"><div class="stat-num" id="sRounds">2轮</div><div class="stat-label">检测轮数</div></div>
+</div>
+</div>
+</div>
+
 <div class="container">
+
+<!-- Backend config (hidden by default) -->
 <div id="backendConfig" style="display:none;background:#16162e;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:16px 20px;margin-bottom:20px">
 <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
 <span style="color:#eab308;font-size:13px">&#9888; GitHub Pages 模式 — 请输入你的后端服务器地址</span>
-<input id="backendUrl" type="text" placeholder="http://your-server:port"  style="flex:1;min-width:200px;padding:8px 12px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#e0e0e0;font-size:13px">
+<input id="backendUrl" type="text" placeholder="http://your-server:port" style="flex:1;min-width:200px;padding:8px 12px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#e0e0e0;font-size:13px">
 <button class="btn btn-primary" style="padding:8px 16px;font-size:12px" onclick="connectBackend()">连接</button>
 <span id="connStatus" style="font-size:12px;color:#666"></span>
 </div>
 </div>
+
+<!-- Proxy input card -->
 <div class="card">
 <div class="card-head">
 <h2>&#128221; 代理列表 <span class="proxy-count-badge" id="proxyCountBadge">0 个代理</span></h2>
@@ -156,12 +191,20 @@ textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 </div>
 <div class="card-body">
 <div class="resize-handle"><textarea id="proxyInput" placeholder="每行一个代理，支持以下格式:&#10;&#10;无前缀(自动识别协议): ip:port&#10;HTTP: http://ip:port&#10;HTTPS: https://ip:port&#10;SOCKS4: socks4://ip:port&#10;SOCKS5: socks5://ip:port&#10;SOCKS5H: socks5h://ip:port&#10;带认证: user:pass@ip:port"></textarea></div>
-<div id="progress" style="width:100%;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;margin-top:12px;display:none">
+<div id="progress" style="width:100%;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;margin-top:10px;display:none">
 <div id="progressBar" style="height:100%;background:linear-gradient(90deg,#7c5cfc,#a855f7);transition:width .3s;width:0%"></div>
 </div>
 <div class="btn-row">
-<button class="btn btn-primary" id="checkBtn" onclick="startCheck()">&#9654; 开始检测</button>
+<div class="detect-dropdown" id="detectDropdown">
+<button class="detect-main-btn" id="checkBtn" onclick="startCheck()">&#9654; <span id="detectBtnLabel">跳过已检测</span> <span class="detect-skip-badge" id="skipBadge" style="display:none"></span></button>
+<button class="detect-arrow-btn" onclick="toggleDetectMenu()">&#9660;</button>
+<div class="detect-menu" id="detectMenu">
+<div class="detect-menu-item" onclick="setDetectMode('skip')"><span class="detect-icon">&#9889;</span> 跳过已检测代理 <span style="color:#666;font-size:11px;margin-left:auto">（默认）</span></div>
+<div class="detect-menu-item" onclick="setDetectMode('force')"><span class="detect-icon">&#128260;</span> 强制检测全部</div>
+</div>
+</div>
 <button class="btn btn-danger" id="stopBtn" style="display:none" onclick="stopCheck()">&#9632; 停止</button>
+<button class="clear-checked-btn" id="clearCheckedBtn" onclick="clearCheckedHistory()" title="清空检测记录">&#128465; 清空检测记录</button>
 <select id="roundsSelect">
 <option value="1">1轮(快速)</option>
 <option value="2" selected>2轮(推荐)</option>
@@ -177,24 +220,37 @@ textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 </div>
 </div>
 </div>
-<div class="stats-row">
-<div class="stat"><div class="stat-num" id="sTotal">0</div><div class="stat-label">总计</div></div>
-<div class="stat"><div class="stat-num" id="sValid" style="color:#22c55e">0</div><div class="stat-label">稳定(2/2)</div></div>
-<div class="stat"><div class="stat-num" id="sUnstable" style="color:#eab308">0</div><div class="stat-label">不稳定(1/2)</div></div>
-<div class="stat"><div class="stat-num" id="sInvalid" style="color:#ef4444">0</div><div class="stat-label">失效</div></div>
-<div class="stat"><div class="stat-num" id="sCfBypass" style="color:#10b981">0</div><div class="stat-label">CF绕过</div></div>
-<div class="stat"><div class="stat-num" id="sRegReady" style="color:#60a5fa">0</div><div class="stat-label">可注册</div></div>
-<div class="stat"><div class="stat-num" id="sRate" style="color:#eab308">0%</div><div class="stat-label">稳定率</div></div>
-<div class="stat"><div class="stat-num" style="font-size:1rem;color:#a78bfa" id="sRounds">2轮</div><div class="stat-label">每代理检测次数</div></div>
+
+<!-- Result card with tabs -->
+<div class="card" id="resultCard">
+<div class="card-head" style="padding:0;border-bottom:none">
+<div class="result-tabs">
+<button class="result-tab active" onclick="switchTab('valid')" id="tabBtnValid">&#9989; 有效代理 <span class="tab-count" id="vCount">0</span></button>
+<button class="result-tab" onclick="switchTab('invalid')" id="tabBtnInvalid">&#10060; 失效代理 <span class="tab-count" id="fCount">0</span></button>
+<button class="result-tab" onclick="switchTab('repo')" id="tabBtnRepo">&#128230; 我的仓库 <span class="tab-count" id="repoCount">0</span></button>
 </div>
-<div class="results-grid">
-<div class="card">
-<div class="card-head">
-<h2>&#9989; 有效代理 <span style="background:rgba(124,92,252,.15);color:#a78bfa;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;margin-left:8px" id="vCount">0</span></h2>
-<div style="display:flex;gap:8px;align-items:center">
-<button class="btn btn-ghost" style="padding:5px 12px;font-size:11px" onclick="copyValidProxies()">复制全部</button>
+</div>
+<div style="border-bottom:1px solid rgba(255,255,255,.06)"></div>
+<div class="card-body" style="padding-top:12px">
+
+<!-- Tab: 有效代理 -->
+<div class="tab-panel active" id="tabValid">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+<div class="filter-bar" id="vFilters" style="margin-bottom:0">
+<button class="fbtn active" data-f="all">全部</button>
+<button class="fbtn" data-f="stable">稳定</button>
+<button class="fbtn" data-f="unstable">不稳定</button>
+<button class="fbtn" data-f="cf_bypass">CF绕过</button>
+<button class="fbtn" data-f="reg_ready">可注册</button>
+<button class="fbtn" data-f="fast">&lt;1秒</button>
+<button class="fbtn" data-f="mid">1-3秒</button>
+<button class="fbtn" data-f="slow">&gt;3秒</button>
+</div>
+<div style="display:flex;gap:6px;align-items:center">
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="clearValid()">清空</button>
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyValidProxies()">复制全部</button>
 <div class="grade-dropdown" id="gradeDropdown">
-<button class="btn btn-ghost" style="padding:5px 12px;font-size:11px" onclick="toggleGradeMenu()">添加到我的仓库</button>
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="toggleGradeMenu()">添加到我的仓库</button>
 <div class="grade-menu" id="gradeMenu">
 <div class="grade-menu-item" onclick="addToRepoByGrade('A')"><span class="grade-dot" style="background:#22c55e"></span>等级 A — 最优</div>
 <div class="grade-menu-item" onclick="addToRepoByGrade('B')"><span class="grade-dot" style="background:#10b981"></span>等级 B — 良好</div>
@@ -205,58 +261,63 @@ textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 </div>
 </div>
 </div>
-<div class="card-body">
-<div class="filter-bar" id="vFilters">
-<button class="fbtn active" data-f="all">全部</button>
-<button class="fbtn" data-f="stable">稳定</button>
-<button class="fbtn" data-f="unstable">不稳定</button>
-<button class="fbtn" data-f="cf_bypass">CF绕过</button>
-<button class="fbtn" data-f="reg_ready">可注册</button>
-<button class="fbtn" data-f="fast">&lt;1秒</button>
-<button class="fbtn" data-f="mid">1-3秒</button>
-<button class="fbtn" data-f="slow">&gt;3秒</button>
-</div>
 <div class="result-list" id="validList"><div class="empty">等待检测...</div></div>
 </div>
-</div>
-<div class="card">
-<div class="card-head">
-<h2>&#10060; 失效代理 <span style="background:rgba(124,92,252,.15);color:#a78bfa;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;margin-left:8px" id="fCount">0</span></h2>
-<button class="btn btn-ghost" style="padding:5px 12px;font-size:11px" onclick="copyFailedProxies()">复制全部</button>
-</div>
-<div class="card-body">
-<div class="filter-bar" id="fFilters">
+
+<!-- Tab: 失效代理 -->
+<div class="tab-panel" id="tabInvalid">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+<div class="filter-bar" id="fFilters" style="margin-bottom:0">
 <button class="fbtn active" data-f="all">全部</button>
 <button class="fbtn" data-f="timeout">超时</button>
 <button class="fbtn" data-f="cf_block">CF拦截</button>
 <button class="fbtn" data-f="conn">连接错误</button>
 <button class="fbtn" data-f="other">其他</button>
 </div>
+<div style="display:flex;gap:6px;align-items:center">
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="clearFailed()">清空</button>
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="copyFailedProxies()">复制全部</button>
+</div>
+</div>
 <div class="result-list" id="failList"><div class="empty">等待检测...</div></div>
 </div>
+
+<!-- Tab: 我的仓库 -->
+<div class="tab-panel" id="tabRepo">
+<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:10px;gap:6px">
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="clearRepo()">&#128465; 清空仓库</button>
+<div class="fetch-dropdown" id="repoIODropdown">
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="toggleRepoIO()">&#128228; 导入/导出 &#9660;</button>
+<div class="fetch-menu" id="repoIOMenu">
+<div class="fetch-menu-item" onclick="document.getElementById('repoFileInput').click()">&#128228; 导入TXT</div>
+<div class="fetch-menu-item" onclick="exportRepo()">&#128229; 导出全部</div>
+<div class="fetch-menu-item" onclick="copyRepo()">&#128203; 复制全部</div>
+<div class="fetch-menu-item" onclick="getRepoLink()">&#128279; 获取仓库链接</div>
 </div>
 </div>
-<!-- 我的仓库 -->
-<div class="card" id="repoCard">
-<div class="card-head">
-<h2>&#128230; 我的仓库 <span style="background:rgba(124,92,252,.15);color:#a78bfa;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;margin-left:8px" id="repoCount">0</span></h2>
-<div style="display:flex;gap:8px;align-items:center">
-<button class="btn btn-ghost" style="padding:5px 12px;font-size:11px" onclick="exportRepo()">&#128229; 导出全部</button>
-<button class="btn btn-ghost" style="padding:5px 12px;font-size:11px" onclick="copyRepo()">&#128203; 复制全部</button>
-<button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#22c55e;border-color:rgba(34,197,94,.3)" onclick="recheckRepo()">&#9654; 再次检测</button>
-<button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444" onclick="clearRepo()">清空仓库</button>
+<input type="file" id="repoFileInput" accept=".txt,.csv" style="display:none" onchange="importRepoTxt(this)">
+<div class="fetch-dropdown" id="repoCloudDropdown">
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:#60a5fa;border-color:rgba(96,165,250,.3)" onclick="toggleRepoCloud()">&#9729; 云端 &#9660;</button>
+<div class="fetch-menu" id="repoCloudMenu">
+<div class="fetch-menu-item" onclick="restoreRepoFromCloud()">&#128260; 恢复云端数据</div>
+<div class="fetch-menu-item" onclick="saveRepoToCloud()">&#128190; 保存到云端</div>
 </div>
 </div>
-<div class="card-body">
-<div class="result-list" id="repoList" style="max-height:300px"><div class="empty">仓库为空，检测完成后可将代理添加到仓库</div></div>
+<button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:#22c55e;border-color:rgba(34,197,94,.3)" onclick="recheckRepo()">&#9654; 再次检测</button>
+</div>
+<div class="result-list" id="repoList" style="max-height:420px"><div class="empty">仓库为空，检测完成后可将代理添加到仓库</div></div>
+</div>
+
 </div>
 </div>
-</div>
+
+</div><!-- end container -->
+
 <div class="toast" id="toast"></div>
 <div class="footer">
-  <a href="https://linux.do" target="_blank">linux.do</a> · by <a href="https://linux.do/u/sq4537/summary" target="_blank">sq4537</a>
+  <a href="https://github.com/strongshuai/proxy-checker" target="_blank">&#128187; GitHub</a> · <a href="https://linux.do" target="_blank">linux.do</a> · by <a href="https://linux.do/u/sq4537/summary" target="_blank">sq4537</a>
 </div>
-<div class="modal-overlay" id="vercelModal"><div class="modal-box"><h3>⚠️ Vercel 体验版提示</h3><p>Vercel 仅推荐用于测试体验，受限于 Serverless 架构，速度很慢，检测准确性也很低。<br><br>建议部署到自己的服务器以获得更快的检测速度和更准确的测试结果。</p><button class="btn btn-primary" onclick="document.getElementById('vercelModal').classList.remove('show')">我知道了</button></div></div>
+<div class="modal-overlay" id="vercelModal"><div class="modal-box"><div class="modal-icon">&#9888;&#65039;</div><h3>Vercel 体验版提示</h3><p>Vercel 仅推荐用于测试体验，受限于 Serverless 架构，速度很慢，检测准确性也很低。<br><br>建议部署到自己的服务器以获得更快的检测速度和更准确的测试结果。</p><button class="btn btn-primary" onclick="document.getElementById('vercelModal').classList.remove('show')">我知道了</button></div></div>
 <script>if(window.location.hostname.endsWith('vercel.app'))document.getElementById('vercelModal').classList.add('show')</script>
 <script src="app.js"></script>
 </body>

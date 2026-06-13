@@ -1,4 +1,4 @@
-# 🔍 ChatGPT Proxy Checker v3
+# 🔍 ChatGPT Proxy Checker v4
 
 多维度代理检测器 — 专为 OpenAI 账号注册场景设计，自动检测免费代理可用性。
 
@@ -19,7 +19,7 @@
 - **可配置检测轮数** — 1 轮(快速) / 2 轮(推荐) / 3 轮(严格)
 - **多线程并发** — 默认 30 并发，支持大量代理批量检测
 
-### 一键拉取免费代理 (v3 新增)
+### 一键拉取免费代理
 - **5 个免费代理源** — 一键拉取最新可用代理，自动追加到检测框
   - Proxifly Free Proxy List (~3500+ 条)
   - ProxyNova Proxy Server List
@@ -27,170 +27,101 @@
   - Free-Proxy-List.net Socks
   - CheckerProxy.net Archive (最近 3 天存档)
 
-### 代理仓库 (v3 新增)
-- **我的仓库** — 检测完成后可将优质代理按等级添加到本地仓库
-- **localStorage 持久化** — 仓库数据保存在浏览器本地，刷新不丢失
-- **再次检测** — 一键将仓库中的代理重新投入检测
-- **导出/复制** — 支持导出 TXT 或一键复制所有仓库代理
+### 智能检测跳过 (v4 新增)
+- **检测历史持久化** — 自动记录已检测过的代理，换浏览器/清缓存不丢失
+- **跳过已检测代理** — 默认模式自动跳过，避免重复检测浪费时间
+- **强制检测全部** — 下拉菜单可切换，一键重新检测所有代理
+- **清空检测记录** — 随时清空历史，重新开始
 
-### UI 优化 (v3 新增)
-- **实时代理计数** — 输入框标题旁实时显示当前代理数量
-- **Textarea 拖拽缩放** — 底部边缘可拖动调整输入框高度
-- **导出格式优化** — 导出为 TXT 格式（一行一个代理），更简洁
-- **统一按钮样式** — 检测轮数下拉框与按钮高度一致
-- **紫色滚动条** — 全局深色主题滚动条，美观统一
+### Tab 三合一面板 (v4 新增)
+- **有效代理 Tab** — 筛选栏(全部/稳定/不稳定/CF绕过/可注册/延迟区间) + 清空/复制/添加到仓库
+- **失效代理 Tab** — 筛选栏(全部/超时/CF拦截/连接错误/其他) + 清空/复制
+- **我的仓库 Tab** — 清空仓库/导入导出/云端同步/再次检测
 
-## 📊 质量等级说明
+### 代理仓库
+- **本地持久化** — localStorage 保存，刷新不丢失
+- **云端持久化** — 服务器端 JSON 格式保存完整检测信息(等级/延迟/IP/CF/注册)
+- **导入 TXT** — 支持导入外部 txt/csv 文件，自动去重
+- **导出 TXT** — 一键导出仓库所有代理
+- **恢复/保存云端** — 手动同步云端数据，换设备也能恢复
+- **仓库链接分享** — 生成可分享的代理列表链接
 
-| 等级 | 条件 | 含义 |
-|------|------|------|
-| **A 最优** | 首页 + API + CF绕过 + 可注册 | 完美，直接用于注册 |
-| **B 良好** | 首页 + API + CF绕过 | 很好，注册页待验证 |
-| **C 可用** | 首页 + API 可达 | 能用，可能遇到 CF |
-| **D 仅首页** | 只有首页能访问 | 不太靠谱 |
-| **F 失效** | 全部失败 | 不能用 |
+### 一键拉取免费代理
+- **5 个免费代理源** — 一键拉取最新可用代理，自动追加到检测框
+  - Proxifly Free Proxy List (~3500+ 条)
+  - ProxyNova Proxy Server List
+  - hidemy.name Proxy List
+  - Free-Proxy-List.net Socks
+  - CheckerProxy.net Archive (最近 3 天存档)
 
-## 🚀 快速开始
+## 📋 v3 → v4 更新日志
 
-### 安装
+### 🎨 界面重构
+- **统计面板移至右上角** — 8 个统计卡片在 header 右侧横向排列，紧凑显示
+- **三面板合并为 Tab 切换** — 有效代理/失效代理/我的仓库合为一个卡片，Tab 切换
+- **Tab 面板统一高度** — 切换 Tab 不再跳动，固定 380px 最小高度
+- **按钮高度统一** — 操作栏所有按钮统一 36px 高度
+- **统计卡片样式优化** — 字体加大(1.3rem)、加粗(800)、白色显示
+- **GitHub 链接移至底部** — 与 linux.do · by sq4537 并列
+- **仓库按钮精简** — 导入/导出合并为下拉菜单，云端操作合并为下拉菜单
 
+### 🧠 智能检测
+- **检测历史持久化** — 服务器端保存已检测代理列表，换设备不丢失
+- **跳过已检测代理** — 默认自动跳过，节省检测时间
+- **强制检测全部** — 下拉菜单切换，一键重新检测
+- **清空检测记录** — 独立按钮，仅清除历史不影响仓库
+
+### 📦 仓库增强
+- **JSON 格式存储** — 云端保存完整检测信息(等级/延迟/IP/CF/注册)，恢复后显示完整标签
+- **恢复云端数据** — 一键从服务器拉取仓库数据
+- **保存到云端** — 手动触发保存，更保险
+- **导入 TXT** — 支持导入外部代理文件，自动去重
+- **清空仓库只清本地** — 云端数据保留，可随时恢复
+- **兼容旧数据** — 自动 fallback 到 default.txt 旧格式
+
+### 🔧 其他优化
+- **token 校验修复** — 支持下划线，修复所有用户数据写入 default.txt 的问题
+- **版本号升至 v4**
+
+## 🚀 快速部署
+
+### 方式一：直接运行
 ```bash
-# 克隆仓库
 git clone https://github.com/strongshuai/proxy-checker.git
 cd proxy-checker
-
-# 一键安装（需要 root 权限）
-chmod +x deploy/install.sh
-sudo bash deploy/install.sh
-```
-
-### 手动安装
-
-```bash
-# 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate
-
-# 安装依赖
 pip install -r requirements.txt
-
-# 启动服务
 python server.py
+# 访问 http://localhost:8888
 ```
 
-### 使用 systemd（推荐）
-
-```bash
-# 复制 service 文件
-sudo cp deploy/vpntest.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable vpntest
-sudo systemctl start vpntest
-
-# 查看状态
-sudo systemctl status vpntest
-
-# 查看日志
-journalctl -u vpntest -f
-```
+### 方式二：Vercel 部署
+点击页面上的 "Deploy" 按钮即可一键部署到 Vercel。
 
 ## 📁 项目结构
 
 ```
 proxy-checker/
-├── server.py          # 后端服务（Python）
-├── index.html         # 前端页面
-├── app.js             # 前端逻辑
-├── fetch_proxies.py   # 免费代理拉取模块
-├── requirements.txt   # Python 依赖
-├── deploy/
-│   ├── install.sh     # 一键安装脚本
-│   └── vpntest.service # systemd 服务文件
+├── index.html          # 前端页面
+├── app.js              # 前端逻辑
+├── server.py           # 后端服务
+├── fetch_proxies.py    # 免费代理拉取模块
+├── requirements.txt    # Python 依赖
+├── vercel.json         # Vercel 配置
+├── deploy/             # 部署脚本
 └── README.md
 ```
 
-## 🔧 API 接口
+## ⚙️ 配置
 
-### POST /api/start
-开始检测代理
+### 环境变量
+- `PORT` — 服务端口，默认 8888
 
-```json
-{
-  "proxies": ["socks5://1.2.3.4:1080", "http://5.6.7.8:8080"],
-  "rounds": 2
-}
-```
-
-### POST /api/status
-查询检测进度
-
-```json
-{
-  "session_id": "xxx",
-  "since": 0
-}
-```
-
-### POST /api/stop
-停止检测
-
-```json
-{
-  "session_id": "xxx"
-}
-```
-
-### POST /api/capabilities
-查询服务器能力（支持的代理源、Deep Check 等）
-
-### POST /api/fetch-proxies
-一键拉取免费代理
-
-```json
-{
-  "source": "proxifly",
-  "limit": 500
-}
-```
-
-## 🛡️ Cloudflare 检测原理
-
-1. **Header 分析** — 检查 `cf-ray`、`cf-chl-*` 等 CF 特征头
-2. **响应体分析** — 检测 15+ 种 CF 挑战标识（challenge-platform, turnstile, cf-chl-b 等）
-3. **页面内容验证** — 区分真实页面 vs CF 挑战页
-4. **多目标交叉验证** — 首页、注册页、API 端点分别检测
-
-## 📝 支持的代理格式
-
-```
-# 无前缀（自动识别协议）
-1.2.3.4:1080
-
-# HTTP
-http://1.2.3.4:8080
-
-# HTTPS
-https://1.2.3.4:8443
-
-# SOCKS4
-socks4://1.2.3.4:1080
-
-# SOCKS5
-socks5://1.2.3.4:1080
-
-# SOCKS5H（远程 DNS）
-socks5h://1.2.3.4:1080
-
-# 带认证
-http://user:pass@1.2.3.4:8080
-```
-
-## 📋 系统要求
-
-- Python 3.8+
-- Linux / macOS / Windows
-- 约 20MB 内存
+### 检测配置 (server.py)
+- `TIMEOUT` — 请求超时时间，默认 12 秒
+- `DETECT_TIMEOUT` — 单次检测超时，默认 8 秒
+- `MAX_CONCURRENT` — 最大并发数，默认 30
+- `CHECK_ROUNDS` — 默认检测轮数，默认 2
 
 ## 📄 License
 
-MIT
+MIT License

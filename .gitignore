@@ -11,3 +11,9 @@ index.html.bak*
 app.js.bak*
 .vercel/
 node_modules/
+repo_data/
+checked_data/
+patch_*.py
+fix_*.py
+*.bak2
+server.log

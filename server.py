@@ -10,6 +10,16 @@ from socketserver import ThreadingMixIn
 from concurrent.futures import ThreadPoolExecutor
 from curl_cffi import requests as cffi_requests
 
+# ============================================================
+# My Repository — save/retrieve repo proxies as txt
+# ============================================================
+REPO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'repo_data')
+os.makedirs(REPO_DIR, exist_ok=True)
+
+# Checked proxies persistence — per-token checked history
+CHECKED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'checked_data')
+os.makedirs(CHECKED_DIR, exist_ok=True)
+
 # === Fetch free proxies from external sources ===
 try:
     from fetch_proxies import fetch_proxies, PROXY_SOURCES
@@ -617,6 +627,64 @@ from http.server import SimpleHTTPRequestHandler
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
+
+        # Serve repo as txt: /api/repo/<token>.txt
+        # Serve repo as JSON: /api/repo/<token>.json
+        if path.startswith("/api/repo/") and path.endswith(".json"):
+            token = path.split("/")[-1].replace(".json", "")
+            json_file = os.path.join(REPO_DIR, f"{token}.json")
+            if os.path.isfile(json_file):
+                with open(json_file, "r") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(b"[]")
+            return
+
+        # Serve repo as txt: /api/repo/<token>.txt
+        if path.startswith("/api/repo/") and path.endswith(".txt"):
+            token = path.split("/")[-1].replace(".txt", "")
+            repo_file = os.path.join(REPO_DIR, f"{token}.txt")
+            if os.path.isfile(repo_file):
+                with open(repo_file, "r") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"Repository not found")
+            return
+        # Serve checked proxies as txt: /api/checked/<token>.txt
+        if path.startswith("/api/checked/") and path.endswith(".txt"):
+            token = path.split("/")[-1].replace(".txt", "")
+            checked_file = os.path.join(CHECKED_DIR, f"{token}.txt")
+            if os.path.isfile(checked_file):
+                with open(checked_file, "r") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(b"")
+            return
         if path == "/": path = "/index.html"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         fp = os.path.normpath(os.path.join(base_dir, path.lstrip("/")))
@@ -702,13 +770,41 @@ class Handler(SimpleHTTPRequestHandler):
                     "proxy_sources": [{"id": s["id"], "name": s["name"]} for s in (PROXY_SOURCES if FETCH_PROXIES_AVAILABLE else [])],
                 })
 
+            elif self.path == "/api/repo/save":
+                # Accept full repo data (JSON array of objects) or legacy proxy list
+                repo_data = body.get("repo", None)
+                proxies = body.get("proxies", [])
+                token = body.get("token", "default")
+                if not token.replace("_","").isalnum():
+                    token = "default"
+
+                if repo_data is not None:
+                    # Full JSON data — save as .json
+                    json_file = os.path.join(REPO_DIR, f"{token}.json")
+                    with open(json_file, "w") as f:
+                        json.dump(repo_data, f, ensure_ascii=False)
+                    # Also save txt for backwards compat
+                    txt_file = os.path.join(REPO_DIR, f"{token}.txt")
+                    proxy_list = [p.get("proxy","") if isinstance(p,dict) else str(p) for p in repo_data]
+                    with open(txt_file, "w") as f:
+                        f.write("\n".join(proxy_list))
+                    log.info(f"Repo saved (JSON): token={token}, proxies={len(repo_data)}")
+                    self._json(200, {"ok": True, "url": f"/api/repo/{token}.json", "count": len(repo_data)})
+                else:
+                    # Legacy txt-only
+                    repo_file = os.path.join(REPO_DIR, f"{token}.txt")
+                    with open(repo_file, "w") as f:
+                        f.write("\n".join(proxies))
+                    log.info(f"Repo saved (txt): token={token}, proxies={len(proxies)}")
+                    self._json(200, {"ok": True, "url": f"/api/repo/{token}.txt", "count": len(proxies)})
+
             elif self.path == "/api/fetch-proxies":
                 # Fetch proxies from external sources
                 if not FETCH_PROXIES_AVAILABLE:
                     self._json(200, {"error": "fetch_proxies 模块不可用"})
                     return
                 source_id = body.get("source", "proxifly")
-                limit = min(int(body.get("limit", 500)), 2000)
+                limit = min(int(body.get("limit", 5000)), 10000)
                 proxies, source_name, err = fetch_proxies(source_id, limit)
                 if err:
                     self._json(200, {"error": err, "source": source_name})
@@ -719,6 +815,40 @@ class Handler(SimpleHTTPRequestHandler):
                         "source": source_name,
                         "source_id": source_id,
                     })
+
+            elif self.path == "/api/checked/save":
+                proxies = body.get("proxies", [])
+                token = body.get("token", "default")
+                if not token.replace("_","").isalnum():
+                    token = "default"
+                checked_file = os.path.join(CHECKED_DIR, f"{token}.txt")
+                with open(checked_file, "w") as f:
+                    f.write("\n".join(proxies))
+                log.info(f"Checked proxies saved: token={token}, count={len(proxies)}")
+                self._json(200, {"ok": True, "count": len(proxies)})
+
+            elif self.path == "/api/checked/filter":
+                # Given a list of proxies, return which ones are NOT yet checked
+                proxies = body.get("proxies", [])
+                token = body.get("token", "default")
+                if not token.replace("_","").isalnum():
+                    token = "default"
+                checked_file = os.path.join(CHECKED_DIR, f"{token}.txt")
+                checked_set = set()
+                if os.path.isfile(checked_file):
+                    with open(checked_file, "r") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                checked_set.add(line.lower())
+                unchecked = [p for p in proxies if p.lower() not in checked_set]
+                skipped = len(proxies) - len(unchecked)
+                self._json(200, {
+                    "unchecked": unchecked,
+                    "skipped": skipped,
+                    "total": len(proxies),
+                    "checked_count": len(checked_set),
+                })
 
             else:
                 self.send_response(404); self.end_headers()

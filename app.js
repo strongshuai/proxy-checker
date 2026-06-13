@@ -141,20 +141,48 @@ checkCapabilities();
 
 var roundsSelect=document.getElementById("roundsSelect");
 var sRounds=document.getElementById("sRounds");
+
+function updateStatLabels(){
+  var r=parseInt(roundsSelect.value)||2;
+  sRounds.textContent=r+"轮";
+  document.querySelector('#sValid').closest('.stat').querySelector('.stat-label').textContent='稳定('+r+'/'+r+')';
+  document.querySelector('#sUnstable').closest('.stat').querySelector('.stat-label').textContent='不稳定('+(r-1>0?r-1:1)+'/'+r+')';
+}
+roundsSelect.addEventListener('change',updateStatLabels);
+updateStatLabels();
+
 function startCheck(){
   if(busy) return;
   var lines=parseLines(proxyInput.value);
   if(!lines.length){toast("请输入至少一个代理");return}
   var rounds=parseInt(roundsSelect.value)||2;
   sRounds.textContent=rounds+"轮";
-  busy=true; V=[]; U=[]; F=[]; totalCount=lines.length; resultsIndex=0;
-  checkBtn.style.display="none";
-  stopBtn.style.display="inline-flex";
+  updateStatLabels();
+
+  // Filter based on detect mode
+  var toCheck=lines;
+  var skippedCount=0;
+  if(detectMode==='skip'&&getCheckedCount()>0){
+    toCheck=lines.filter(function(p){return !isChecked(p)});
+    skippedCount=lines.length-toCheck.length;
+  }
+  if(toCheck.length===0){
+    toast("所有代理均已检测过，请切换到'强制检测全部'模式或清空检测记录");
+    return;
+  }
+
+  busy=true; V=[]; U=[]; F=[]; totalCount=toCheck.length; resultsIndex=0;
+  checkBtn.disabled=true;
+  document.getElementById('stopBtn').style.display="inline-flex";
   prog.style.display="block";
   progBar.style.width="0%";
   validList.innerHTML=""; failList.innerHTML="";
-  statusText.textContent="正在提交...";
-  post("/api/start",{proxies:lines,rounds:rounds},function(err,res){
+  if(skippedCount>0){
+    statusText.textContent="跳过 "+skippedCount+" 个已检测代理，正在提交 "+toCheck.length+" 个...";
+  }else{
+    statusText.textContent="正在提交...";
+  }
+  post("/api/start",{proxies:toCheck,rounds:rounds},function(err,res){
     if(err){toast(err);finishCheck(false);return}
     sid=res.session_id; totalCount=res.total;
     statusText.textContent="正在检测 0/"+totalCount;
@@ -176,8 +204,14 @@ function poll(){
       progBar.style.width=pct+"%";
       statusText.textContent="已检测 "+res.total_done+"/"+totalCount+" ("+pct+"%)";
       updateStats();
+      saveResults();
     }
     if(res.finished){
+      // Mark all detected proxies as checked
+      var allDetected=V.concat(U).concat(F);
+      markCheckedBatch(allDetected.map(function(r){return r.original||r.proxy}));
+      saveCheckedLocal();
+      syncCheckedToServer();
       finishCheck(false);
       toast("检测完成: "+V.length+" 稳定, "+U.length+" 不稳定, "+F.length+" 失效");
       statusText.textContent="检测完成";
@@ -191,10 +225,12 @@ function stopCheck(){
 }
 function finishCheck(stopped){
   busy=false;sid=null;
-  checkBtn.style.display="inline-flex";
-  stopBtn.style.display="none";
+  checkBtn.disabled=false;
+  document.getElementById('stopBtn').style.display="none";
   prog.style.display="none";
   statusText.textContent=stopped?"已停止":"检测完成";
+  saveResults();
+  updateSkipBadge();
 }
 
 function appendItem(list,r,type){
@@ -309,9 +345,18 @@ function copyValidProxies(){
   toast("已复制 "+all.length+" 个可用代理");
 }
 function copyFailedProxies(){copyText(F.map(function(r){return r.proxy}).join("\n"));toast("已复制 "+F.length+" 个失效代理")}
+function clearValid(){
+  V=[];U=[];validList.innerHTML='<div class="empty">等待检测...</div>';
+  updateStats();saveResults();toast('已清空有效代理');
+}
+function clearFailed(){
+  F=[];failList.innerHTML='<div class="empty">等待检测...</div>';
+  updateStats();saveResults();toast('已清空失效代理');
+}
 function clearAll(){
   if(busy)stopCheck();
   proxyInput.value="";V=[];U=[];F=[];totalCount=0;sid=null;
+  try{localStorage.removeItem(RESULTS_KEY)}catch(e){}
   validList.innerHTML='<div class="empty">等待检测...</div>';
   failList.innerHTML='<div class="empty">等待检测...</div>';
   vCount.textContent="0";fCount.textContent="0";
@@ -335,6 +380,23 @@ function loadDemo(){
   proxyInput.value="# 示例(支持自动识别协议)\n127.0.0.1:7890\n192.168.1.1:1080\n# 也支持带前缀\nhttp://user:pass@proxy.example.com:8080\nhttps://proxy.example.com:8443\nsocks4://your-proxy:1080\nsocks5://your-proxy:1080\nsocks5h://your-proxy:1080";
   updateProxyCount();
   toast('已加载示例');
+}
+
+// Tab switching
+function switchTab(tab){
+  document.querySelectorAll('.result-tab').forEach(function(t){t.classList.remove('active')});
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active')});
+  if(tab==='valid'){
+    document.getElementById('tabBtnValid').classList.add('active');
+    document.getElementById('tabValid').classList.add('active');
+  }else if(tab==='invalid'){
+    document.getElementById('tabBtnInvalid').classList.add('active');
+    document.getElementById('tabInvalid').classList.add('active');
+  }else if(tab==='repo'){
+    document.getElementById('tabBtnRepo').classList.add('active');
+    document.getElementById('tabRepo').classList.add('active');
+    renderRepo();
+  }
 }
 
 // Filter buttons
@@ -416,11 +478,178 @@ function addToRepoByGrade(grade){
 // [5] 我的仓库 — localStorage persistence
 // ============================================================
 var REPO_KEY='proxy_checker_repo';
+var USER_TOKEN_KEY='proxy_checker_token';
+var REPO_SYNCED_KEY='proxy_checker_synced';
+
+function getUserToken(){
+  var t=localStorage.getItem(USER_TOKEN_KEY);
+  if(!t){t='user_'+Math.random().toString(36).substr(2,12);localStorage.setItem(USER_TOKEN_KEY,t)}
+  return t;
+}
+
+function syncRepoToServer(){
+  var repo=loadRepo();
+  var token=getUserToken();
+  post('/api/repo/save',{repo:repo,token:token},function(err,res){
+    if(!err&&res.ok){localStorage.setItem(REPO_SYNCED_KEY,JSON.stringify({count:res.count,time:Date.now()}))}
+  });
+}
+
+function loadRepoFromServer(callback){
+  var token=getUserToken();
+  function tryLoadJson(t,cb){
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET',API_BASE+'/api/repo/'+t+'.json',true);
+    xhr.onload=function(){
+      if(xhr.status===200){
+        try{
+          var data=JSON.parse(xhr.responseText);
+          if(Array.isArray(data)&&data.length>0){cb(data.length,data);return}
+        }catch(e){}
+        // Fallback to txt
+        tryLoadTxt(t,cb);
+      }else{tryLoadTxt(t,cb)}
+    };
+    xhr.onerror=function(){tryLoadTxt(t,cb)};
+    xhr.send();
+  }
+  function tryLoadTxt(t,cb){
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET',API_BASE+'/api/repo/'+t+'.txt',true);
+    xhr.onload=function(){
+      if(xhr.status===200){
+        var text=xhr.responseText.trim();
+        if(!text){cb(0);return}
+        var lines=text.split('\n').filter(function(l){return l.trim()});
+        var repo=lines.map(function(p){return {proxy:p,grade:'?',latency:null,ip:null,ip_type:null,cf_bypass:false,api_reachable:false,registration_ready:false,added:Date.now()}});
+        cb(repo.length,repo);
+      }else{cb(0)}
+    };
+    xhr.onerror=function(){cb(0)};
+    xhr.send();
+  }
+  tryLoadJson(token,function(count,repo){
+    if(count>0){
+      saveRepo(repo);
+      renderRepo();
+      if(callback)callback(count);
+    }else{
+      tryLoadJson('default',function(count2,repo2){
+        if(count2>0){
+          saveRepo(repo2);
+          syncRepoToServer();
+          renderRepo();
+          if(callback)callback(count2);
+        }else{
+          if(callback)callback(0);
+        }
+      });
+    }
+  });
+}
+var RESULTS_KEY='proxy_checker_results';
+var CHECKED_KEY='proxy_checker_checked';
+var detectMode=localStorage.getItem('proxy_checker_detect_mode')||'skip'; // 'skip' or 'force'
+var checkedProxies=new Set();
+var checkedSyncTimer=null;
+
+function loadCheckedLocal(){
+  try{
+    var arr=JSON.parse(localStorage.getItem(CHECKED_KEY))||[];
+    checkedProxies=new Set(arr);
+  }catch(e){checkedProxies=new Set()}
+}
+function saveCheckedLocal(){
+  try{localStorage.setItem(CHECKED_KEY,JSON.stringify([...checkedProxies]))}catch(e){}
+}
+function syncCheckedToServer(){
+  clearTimeout(checkedSyncTimer);
+  checkedSyncTimer=setTimeout(function(){
+    var token=getUserToken();
+    var arr=[...checkedProxies];
+    // Limit to 50000 to avoid huge payloads
+    if(arr.length>50000) arr=arr.slice(-50000);
+    post('/api/checked/save',{proxies:arr,token:token},function(){});
+  },1500);
+}
+function loadCheckedFromServer(callback){
+  var token=getUserToken();
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET',API_BASE+'/api/checked/'+token+'.txt',true);
+  xhr.onload=function(){
+    if(xhr.status===200){
+      var lines=xhr.responseText.split('\n').filter(function(l){return l.trim()});
+      lines.forEach(function(l){checkedProxies.add(l.trim())});
+      saveCheckedLocal();
+      if(callback)callback(lines.length);
+    }else{if(callback)callback(0)}
+  };
+  xhr.onerror=function(){if(callback)callback(0)};
+  xhr.send();
+}
+function markChecked(proxy){checkedProxies.add(proxy)}
+function markCheckedBatch(proxies){proxies.forEach(function(p){checkedProxies.add(p)})}
+function isChecked(proxy){return checkedProxies.has(proxy)}
+function getCheckedCount(){return checkedProxies.size}
+
+function setDetectMode(mode){
+  detectMode=mode;
+  localStorage.setItem('proxy_checker_detect_mode',mode);
+  document.getElementById('detectDropdown').classList.remove('open');
+  var label=document.getElementById('detectBtnLabel');
+  if(mode==='skip'){label.textContent='跳过已检测'}
+  else{label.textContent='强制检测全部'}
+  updateSkipBadge();
+}
+function toggleDetectMenu(){
+  document.getElementById('detectDropdown').classList.toggle('open');
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.detect-dropdown'))document.getElementById('detectDropdown').classList.remove('open');
+});
+function updateSkipBadge(){
+  var badge=document.getElementById('skipBadge');
+  var count=getCheckedCount();
+  if(detectMode==='skip'&&count>0){
+    badge.style.display='inline';
+    badge.textContent=count+'个已检测';
+  }else{
+    badge.style.display='none';
+  }
+}
+function clearCheckedHistory(){
+  if(!getCheckedCount()){toast('检测记录为空');return}
+  if(!confirm('确定清空检测记录？清空后所有代理将被重新检测。'))return;
+  checkedProxies.clear();
+  saveCheckedLocal();
+  syncCheckedToServer();
+  updateSkipBadge();
+  toast('检测记录已清空');
+}
+
+// Initialize detect mode UI
+(function(){
+  var label=document.getElementById('detectBtnLabel');
+  if(detectMode==='force'){label.textContent='强制检测全部'}
+  else{label.textContent='跳过已检测'}
+})();
+
+function saveResults(){
+  try{localStorage.setItem(RESULTS_KEY,JSON.stringify({valid:V,unstable:U,invalid:F}))}catch(e){}
+}
+function loadSavedResults(){
+  try{var d=JSON.parse(localStorage.getItem(RESULTS_KEY));if(d){V=d.valid||[];U=d.unstable||[];F=d.invalid||[];return true}}catch(e){}
+  return false;
+}
 
 function loadRepo(){
   try{return JSON.parse(localStorage.getItem(REPO_KEY))||[]}catch(e){return[]}
 }
-function saveRepo(repo){localStorage.setItem(REPO_KEY,JSON.stringify(repo))}
+function saveRepo(repo){
+  localStorage.setItem(REPO_KEY,JSON.stringify(repo));
+  clearTimeout(saveRepo._timer);
+  saveRepo._timer=setTimeout(syncRepoToServer,1000);
+}
 
 function renderRepo(){
   var repo=loadRepo();
@@ -483,15 +712,135 @@ function copyRepo(){
   toast("已复制 "+repo.length+" 个代理");
 }
 
+function restoreRepoFromCloud(){
+  var local=loadRepo();
+  if(local.length>0 && !confirm('清空本地仓库并从云端恢复？'))return;
+  loadRepoFromServer(function(count){
+    if(count>0) toast('已从云端恢复 '+count+' 个代理');
+    else toast('云端没有仓库数据');
+  });
+}
+
+function toggleRepoIO(){
+  document.getElementById('repoIODropdown').classList.toggle('open');
+}
+function toggleRepoCloud(){
+  document.getElementById('repoCloudDropdown').classList.toggle('open');
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#repoIODropdown'))document.getElementById('repoIODropdown').classList.remove('open');
+  if(!e.target.closest('#repoCloudDropdown'))document.getElementById('repoCloudDropdown').classList.remove('open');
+});
+function saveRepoToCloud(){
+  document.getElementById('repoCloudDropdown').classList.remove('open');
+  var repo=loadRepo();
+  if(!repo.length){toast('仓库为空，无需保存');return}
+  var token=getUserToken();
+  post('/api/repo/save',{repo:repo,token:token},function(err,res){
+    if(err){toast('保存失败: '+err);return}
+    if(res.ok){
+      localStorage.setItem(REPO_SYNCED_KEY,JSON.stringify({count:res.count,time:Date.now()}));
+      toast('已保存 '+res.count+' 个代理到云端');
+    }
+  });
+}
+
 function clearRepo(){
-  if(!loadRepo().length){toast('仓库已为空');return}
-  saveRepo([]);
+  if(!loadRepo().length){toast('仓库已经是空的');return}
+  if(!confirm('确定清空本地仓库？\n注意：云端数据不会被删除，可随时通过「恢复云端数据」恢复。'))return;
+  localStorage.removeItem(REPO_KEY);
   renderRepo();
-  toast('仓库已清空');
+  toast('本地仓库已清空（云端数据保留）');
+}
+
+function importRepoTxt(input){
+  var file=input.files[0];
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var text=e.target.result;
+    var lines=text.split("\n").map(function(l){return l.trim()}).filter(function(l){return l.length>0&&!l.startsWith("#")});
+    if(!lines.length){toast("文件中没有有效的代理");return}
+    var repo=loadRepo();
+    var existingSet={};
+    repo.forEach(function(p){existingSet[p.proxy]=true});
+    var added=0;
+    lines.forEach(function(proxy){
+      if(!existingSet[proxy]){
+        repo.push({proxy:proxy,grade:"?",latency:null,ip:null,ip_type:null,cf_bypass:false,api_reachable:false,registration_ready:false,added:Date.now()});
+        existingSet[proxy]=true;
+        added++;
+      }
+    });
+    saveRepo(repo);
+    renderRepo();
+    toast("已导入 "+added+" 个代理到仓库"+(added<lines.length?"（跳过 "+(lines.length-added)+" 个重复）":""));
+  };
+  reader.readAsText(file);
+  input.value="";
 }
 
 // Initial render
 renderRepo();
+// Load checked proxies from server
+loadCheckedLocal();
+updateSkipBadge();
+loadCheckedFromServer(function(count){
+  if(count>0){updateSkipBadge();toast('从服务器恢复 '+count+' 条检测记录')}
+});
+// If repo is empty, try loading from server
+if(!loadRepo().length){
+  loadRepoFromServer(function(count){
+    if(count>0){toast('从服务器恢复 '+count+' 个仓库代理')}
+  });
+}
+// Restore saved detection results
+if(loadSavedResults()){
+  var all=V.concat(U).concat(F);
+  if(all.length>0){
+    V.forEach(function(r){appendItem(validList,r,"valid")});
+    U.forEach(function(r){appendItem(validList,r,"unstable")});
+    F.forEach(function(r){appendItem(failList,r,"invalid")});
+    updateStats();
+    statusText.textContent="已恢复 "+all.length+" 条历史结果";
+  }
+}
+
+// Get repo link — sync to server and show URL
+function getRepoLink(){
+  var repo=loadRepo();
+  if(!repo.length){toast('仓库为空');return}
+  var proxies=repo.map(function(p){return p.proxy});
+  var hash=0;
+  proxies.forEach(function(p){for(var i=0;i<p.length;i++){hash=((hash<<5)-hash)+p.charCodeAt(i);hash|=0}});
+  var token='repo'+Math.abs(hash).toString(36);
+  var btn=event.target;
+  btn.textContent='同步中...';
+  btn.disabled=true;
+  post('/api/repo/save',{proxies:proxies,token:token},function(err,res){
+    btn.innerHTML='&#128279; 获取仓库链接';
+    btn.disabled=false;
+    if(err||res.error){toast('同步失败: '+(err||res.error));return}
+    var url=API_BASE+res.url;
+    copyText(url);
+    toast('链接已复制 ('+res.count+'个代理)');
+    var overlay=document.createElement('div');
+    overlay.className='modal-overlay show';
+    overlay.onclick=function(e){if(e.target===overlay)overlay.remove()};
+    var html='<div class="modal-box" style="max-width:500px">';
+    html+='<div class="modal-icon" style="background:linear-gradient(135deg,rgba(96,165,250,.15),rgba(96,165,250,.05));border-color:rgba(96,165,250,.2)">&#128279;</div>';
+    html+='<h3>仓库链接</h3>';
+    html+='<p style="margin-bottom:16px">在其他程序的代理框中粘贴此链接即可拉取：</p>';
+    html+='<input id="repoLinkInput" readonly value="'+url+'" style="width:100%;padding:12px 14px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e0e0e0;font-family:monospace;font-size:12px;margin-bottom:20px">';
+    html+='<div style="display:flex;gap:10px;justify-content:center">';
+    html+='<button class="btn btn-ghost" onclick="navigator.clipboard.writeText(document.getElementById(\'repoLinkInput\').value);toast(\'已复制\')">复制链接</button>';
+    html+='<button class="btn btn-primary" onclick="this.closest(\'.modal-overlay\').remove()">关闭</button>';
+    html+='</div></div>';
+    overlay.innerHTML=html;
+    document.body.appendChild(overlay);
+    document.getElementById('repoLinkInput').select();
+  });
+}
 
 // Re-check all proxies in repo
 function recheckRepo(){
@@ -544,7 +893,7 @@ function doFetchProxies(sourceId){
   btn.innerHTML='&#8987; 拉取中...';
   btn.disabled=true;
   statusText.textContent='正在从 '+sourceId+' 拉取代理...';
-  post("/api/fetch-proxies",{source:sourceId,limit:500},function(err,res){
+  post("/api/fetch-proxies",{source:sourceId,limit:5000},function(err,res){
     btn.innerHTML=origText;
     btn.disabled=false;
     if(err){
