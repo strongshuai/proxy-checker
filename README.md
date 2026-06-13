@@ -51,6 +51,12 @@
   - Free-Proxy-List.net Socks
   - CheckerProxy.net Archive (最近 3 天存档)
 
+## 📋 v4 → v4.1 更新日志
+
+### 🔗 仓库链接固定
+- **链接不再变化** — 修复了"获取仓库链接"功能，token 不再基于内容 hash 生成
+- **固定为 `/api/repo/myrepo.txt`** — 复制到其他程序后无需反复更新
+
 ## 📋 v3 → v4 更新日志
 
 ### 🎨 界面重构
