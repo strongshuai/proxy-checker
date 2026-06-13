@@ -884,7 +884,7 @@ function doFetchProxies(sourceId){
   btn.innerHTML='&#8987; 拉取中...';
   btn.disabled=true;
   statusText.textContent='正在从 '+sourceId+' 拉取代理...';
-  post('/api/fetch-proxies',{source:sourceId,limit:500},function(err,res){
+  post('/api/fetch-proxies',{source:sourceId,limit:50000},function(err,res){
     btn.innerHTML=origText;
     btn.disabled=false;
     if(err){
