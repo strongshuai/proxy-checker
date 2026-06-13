@@ -812,13 +812,13 @@ if(loadSavedResults()){
 }
 
 // Get repo link — sync to server and show URL
+// Get repo link — sync to server and show URL
 function getRepoLink(){
   var repo=loadRepo();
   if(!repo.length){toast('仓库为空');return}
   var proxies=repo.map(function(p){return p.proxy});
-  var hash=0;
-  proxies.forEach(function(p){for(var i=0;i<p.length;i++){hash=((hash<<5)-hash)+p.charCodeAt(i);hash|=0}});
-  var token='repo'+Math.abs(hash).toString(36);
+  // Fixed: use static token so link never changes
+  var token='myrepo';
   var btn=event.target;
   btn.textContent='同步中...';
   btn.disabled=true;
@@ -847,20 +847,6 @@ function getRepoLink(){
   });
 }
 
-// Re-check all proxies in repo
-function recheckRepo(){
-  var repo=loadRepo();
-  if(!repo.length){toast('仓库为空');return}
-  if(busy){toast('正在检测中，请等待完成');return}
-  // Put repo proxies into textarea
-  proxyInput.value=repo.map(function(p){return p.proxy}).join('\n');
-  updateProxyCount();
-  toast('已加载仓库 '+repo.length+' 个代理到检测框');
-  // Scroll to top and start
-  window.scrollTo({top:0,behavior:'smooth'});
-  setTimeout(startCheck,500);
-}
-
 // ============================================================
 // Fetch free proxies from external sources
 // ============================================================
@@ -869,7 +855,7 @@ var fetchMenu=document.getElementById('fetchMenu');
 var fetchDropdown=document.getElementById('fetchDropdown');
 
 function initFetchMenu(){
-  post("/api/capabilities",{},function(err,res){
+  post('/api/capabilities',{},function(err,res){
     if(err||!res)return;
     if(!res.fetch_proxies)return;
     fetchSources=res.proxy_sources||[];
@@ -898,7 +884,7 @@ function doFetchProxies(sourceId){
   btn.innerHTML='&#8987; 拉取中...';
   btn.disabled=true;
   statusText.textContent='正在从 '+sourceId+' 拉取代理...';
-  post("/api/fetch-proxies",{source:sourceId,limit:5000},function(err,res){
+  post('/api/fetch-proxies',{source:sourceId,limit:500},function(err,res){
     btn.innerHTML=origText;
     btn.disabled=false;
     if(err){
