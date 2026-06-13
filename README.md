@@ -5,12 +5,6 @@
 ## 🌐 截图
 <img width="3743" height="1992" alt="屏幕截图_13-6-2026_11916_23 94 202 182" src="https://github.com/user-attachments/assets/d1b200dd-adf7-41d4-a5b9-af6194b97612" />
 
-## 🌐 在线体验
-
-> **Vercel 版：** [proxy-checker-nu.vercel.app](https://proxy-checker-nu.vercel.app)
-> 
-> Vercel 仅推荐测试体验，速度慢。建议部署到自己服务器测试速度更快。
-
 ## ✨ 功能特性
 
 ### 检测能力
@@ -73,9 +67,6 @@ python server.py
 # 访问 http://localhost:8888
 ```
 
-### 方式二：Vercel 部署
-点击页面上的 "Deploy" 按钮即可一键部署到 Vercel。
-
 ## 📁 项目结构
 
 ```
@@ -85,8 +76,6 @@ proxy-checker/
 ├── server.py           # 后端服务
 ├── fetch_proxies.py    # 免费代理拉取模块
 ├── requirements.txt    # Python 依赖
-├── vercel.json         # Vercel 配置
-├── deploy/             # 部署脚本
 └── README.md
 ```
 
