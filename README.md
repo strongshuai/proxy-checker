@@ -2,11 +2,8 @@
 
 多维度代理检测器 — 专为 OpenAI 账号注册场景设计，自动检测免费代理可用性。
 
-## 🌐 在线体验
-
-**Vercel 版：** [https://proxy-checker-gold.vercel.app](https://proxy-checker-gold.vercel.app)
-
-> ⚠️ Vercel 仅推荐用于测试体验，受限于 Serverless 冷启动，速度很慢准确性也大幅降低。建议部署到自己的服务器以获得更快的检测速度以及更准的测试。
+## 🌐 截图
+<img width="3743" height="1992" alt="屏幕截图_13-6-2026_11916_23 94 202 182" src="https://github.com/user-attachments/assets/d1b200dd-adf7-41d4-a5b9-af6194b97612" />
 
 ## ✨ 功能特性
 
