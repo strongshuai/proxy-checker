@@ -251,7 +251,7 @@ def _fetch_checkerproxy(url, limit):
     return proxies, None
 
 
-def fetch_proxies(source_id, limit=500):
+def fetch_proxies(source_id, limit=999999):
     """
     Fetch proxies from a source. Returns (proxy_list, source_name, error).
     """

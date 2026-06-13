@@ -804,7 +804,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self._json(200, {"error": "fetch_proxies 模块不可用"})
                     return
                 source_id = body.get("source", "proxifly")
-                limit = min(int(body.get("limit", 5000)), 10000)
+                limit = min(int(body.get("limit", 999999)), 999999)
                 proxies, source_name, err = fetch_proxies(source_id, limit)
                 if err:
                     self._json(200, {"error": err, "source": source_name})
