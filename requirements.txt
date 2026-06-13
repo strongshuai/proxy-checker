@@ -1,2 +1,1 @@
-flask
-curl_cffi>=0.15.0
+curl_cffi>=0.14.0
