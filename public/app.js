@@ -812,9 +812,100 @@ if(loadSavedResults()){
 }
 
 // Get repo link — sync to server and show URL
+// Get repo link — sync to server and show URL
 function getRepoLink(){
   var repo=loadRepo();
   if(!repo.length){toast('仓库为空');return}
   var proxies=repo.map(function(p){return p.proxy});
-  // FIXED: use static token instead of content hash
+  // Fixed: use static token so link never changes
   var token='myrepo';
+  var btn=event.target;
+  btn.textContent='同步中...';
+  btn.disabled=true;
+  post('/api/repo/save',{proxies:proxies,token:token},function(err,res){
+    btn.innerHTML='&#128279; 获取仓库链接';
+    btn.disabled=false;
+    if(err||res.error){toast('同步失败: '+(err||res.error));return}
+    var url=API_BASE+res.url;
+    copyText(url);
+    toast('链接已复制 ('+res.count+'个代理)');
+    var overlay=document.createElement('div');
+    overlay.className='modal-overlay show';
+    overlay.onclick=function(e){if(e.target===overlay)overlay.remove()};
+    var html='<div class="modal-box" style="max-width:500px">';
+    html+='<div class="modal-icon" style="background:linear-gradient(135deg,rgba(96,165,250,.15),rgba(96,165,250,.05));border-color:rgba(96,165,250,.2)">&#128279;</div>';
+    html+='<h3>仓库链接</h3>';
+    html+='<p style="margin-bottom:16px">在其他程序的代理框中粘贴此链接即可拉取：</p>';
+    html+='<input id="repoLinkInput" readonly value="'+url+'" style="width:100%;padding:12px 14px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e0e0e0;font-family:monospace;font-size:12px;margin-bottom:20px">';
+    html+='<div style="display:flex;gap:10px;justify-content:center">';
+    html+='<button class="btn btn-ghost" onclick="navigator.clipboard.writeText(document.getElementById(\'repoLinkInput\').value);toast(\'已复制\')">复制链接</button>';
+    html+='<button class="btn btn-primary" onclick="this.closest(\'.modal-overlay\').remove()">关闭</button>';
+    html+='</div></div>';
+    overlay.innerHTML=html;
+    document.body.appendChild(overlay);
+    document.getElementById('repoLinkInput').select();
+  });
+}
+
+// ============================================================
+// Fetch free proxies from external sources
+// ============================================================
+var fetchSources=[];
+var fetchMenu=document.getElementById('fetchMenu');
+var fetchDropdown=document.getElementById('fetchDropdown');
+
+function initFetchMenu(){
+  post('/api/capabilities',{},function(err,res){
+    if(err||!res)return;
+    if(!res.fetch_proxies)return;
+    fetchSources=res.proxy_sources||[];
+    if(!fetchSources.length)return;
+    var html='';
+    fetchSources.forEach(function(s){
+      html+='<div class="fetch-menu-item" onclick="doFetchProxies(\''+esc(s.id)+'\')">'+esc(s.name)+'</div>';
+    });
+    fetchMenu.innerHTML=html;
+    document.getElementById('fetchBtn').style.display='inline-flex';
+  });
+}
+initFetchMenu();
+
+function toggleFetchMenu(){
+  fetchDropdown.classList.toggle('open');
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.fetch-dropdown'))fetchDropdown.classList.remove('open');
+});
+
+function doFetchProxies(sourceId){
+  fetchDropdown.classList.remove('open');
+  var btn=document.getElementById('fetchBtn');
+  var origText=btn.innerHTML;
+  btn.innerHTML='&#8987; 拉取中...';
+  btn.disabled=true;
+  statusText.textContent='正在从 '+sourceId+' 拉取代理...';
+  post('/api/fetch-proxies',{source:sourceId,limit:500},function(err,res){
+    btn.innerHTML=origText;
+    btn.disabled=false;
+    if(err){
+      toast('拉取失败: '+err);
+      statusText.textContent='';
+      return;
+    }
+    if(res.error){
+      toast('拉取失败: '+res.error);
+      statusText.textContent='';
+      return;
+    }
+    var proxyLines=res.proxies.map(function(p){return p.proxy});
+    var existing=proxyInput.value.trim();
+    if(existing){
+      proxyInput.value=existing+'\n'+proxyLines.join('\n');
+    }else{
+      proxyInput.value=proxyLines.join('\n');
+    }
+    updateProxyCount();
+    toast('已从 '+res.source+' 拉取 '+res.count+' 个代理');
+    statusText.textContent='已追加 '+res.count+' 个代理';
+  });
+}
