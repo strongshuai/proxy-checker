@@ -4,7 +4,7 @@
 
 ## 🌐 在线体验
 
-**Vercel 版：** [https://proxy-checker-nu.vercel.app](https://proxy-checker-gold.vercel.app/)
+**Vercel 版：** [https://proxy-checker-gold.vercel.app](https://proxy-checker-gold.vercel.app)
 
 > ⚠️ Vercel 仅推荐用于测试体验，受限于 Serverless 冷启动，速度很慢准确性也大幅降低。建议部署到自己的服务器以获得更快的检测速度以及更准的测试。
 
