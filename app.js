@@ -715,6 +715,7 @@ function copyRepo(){
 function restoreRepoFromCloud(){
   var local=loadRepo();
   if(local.length>0 && !confirm('清空本地仓库并从云端恢复？'))return;
+  localStorage.removeItem('repo_manually_cleared');
   loadRepoFromServer(function(count){
     if(count>0) toast('已从云端恢复 '+count+' 个代理');
     else toast('云端没有仓库数据');
@@ -733,6 +734,7 @@ document.addEventListener('click',function(e){
 });
 function saveRepoToCloud(){
   document.getElementById('repoCloudDropdown').classList.remove('open');
+  localStorage.removeItem('repo_manually_cleared');
   var repo=loadRepo();
   if(!repo.length){toast('仓库为空，无需保存');return}
   var token=getUserToken();
@@ -749,11 +751,13 @@ function clearRepo(){
   if(!loadRepo().length){toast('仓库已经是空的');return}
   if(!confirm('确定清空本地仓库？\n注意：云端数据不会被删除，可随时通过「恢复云端数据」恢复。'))return;
   localStorage.removeItem(REPO_KEY);
+  localStorage.setItem('repo_manually_cleared','1');
   renderRepo();
   toast('本地仓库已清空（云端数据保留）');
 }
 
 function importRepoTxt(input){
+  localStorage.removeItem('repo_manually_cleared');
   var file=input.files[0];
   if(!file)return;
   var reader=new FileReader();
@@ -788,8 +792,9 @@ updateSkipBadge();
 loadCheckedFromServer(function(count){
   if(count>0){updateSkipBadge();toast('从服务器恢复 '+count+' 条检测记录')}
 });
-// If repo is empty, try loading from server
-if(!loadRepo().length){
+// If repo is empty, try loading from server (skip if user manually cleared)
+var repoClearedManually=localStorage.getItem('repo_manually_cleared');
+if(!repoClearedManually && !loadRepo().length){
   loadRepoFromServer(function(count){
     if(count>0){toast('从服务器恢复 '+count+' 个仓库代理')}
   });
