@@ -158,6 +158,7 @@ check_engine = ProxyCheckEngine(
 sessions = {}
 sessions_lock = threading.Lock()
 auto_runtime = {}
+auto_stopped_results = {}
 auto_lock = threading.Lock()
 TARGET_PROFILE_IDS = {str(item["id"]) for item in TARGET_PROFILE_OPTIONS}
 
@@ -827,14 +828,25 @@ def runtime_counts(results):
     return valid, unstable, invalid
 
 
-def get_auto_status(token):
+def get_auto_status(token, since=0, client_session_id=""):
     token = sanitize_token(token)
     with auto_lock:
         record = load_auto_record(token)
         config = normalize_auto_config(record.get("config", {}))
         runtime = auto_runtime.get(token)
+        new_results = []
+        results_index = 0
         if runtime:
             results = runtime.get("results", [])
+            try:
+                since = int(since)
+            except (TypeError, ValueError):
+                since = 0
+            if client_session_id and client_session_id != runtime.get("run_id"):
+                since = 0
+            since = max(0, min(len(results), since))
+            new_results = results[since:]
+            results_index = len(results)
             valid, unstable, invalid = runtime_counts(results)
             record["state"].update({
                 "running": True,
@@ -849,9 +861,26 @@ def get_auto_status(token):
                 "invalid_count": invalid,
                 "source_count": runtime.get("source_count", 0),
                 "repo_count": runtime.get("repo_count", 0),
+                "input_count": runtime.get("input_count", 0),
                 "skipped": runtime.get("skipped", 0),
                 "error": runtime.get("error"),
             })
+        else:
+            stopped = auto_stopped_results.get(token)
+            if stopped and stopped.get("expires", 0) < time.time():
+                del auto_stopped_results[token]
+                stopped = None
+            if stopped:
+                results = stopped.get("results", [])
+                try:
+                    since = int(since)
+                except (TypeError, ValueError):
+                    since = 0
+                if client_session_id and client_session_id != stopped.get("run_id"):
+                    since = 0
+                since = max(0, min(len(results), since))
+                new_results = results[since:]
+                results_index = len(results)
         state = record["state"]
         state["next_run_text"] = format_timestamp(state.get("next_run_at"), config.get("timezone"))
         state["started_text"] = format_timestamp(state.get("started_at"), config.get("timezone"))
@@ -859,6 +888,8 @@ def get_auto_status(token):
         record["config"] = config
         record["server_time"] = server_time_payload(config.get("timezone"))
         record["auto_mode"] = True
+        record["new"] = new_results
+        record["results_index"] = results_index
         return record
 
 
@@ -881,7 +912,7 @@ def update_auto_runtime(token, **fields):
             state["stage"] = fields["stage"]
         if "status" in fields:
             state["status"] = fields["status"]
-        for key in ("total", "done", "source_count", "repo_count", "skipped", "error"):
+        for key in ("total", "done", "source_count", "repo_count", "input_count", "skipped", "error"):
             if key in fields:
                 state[key] = fields[key]
         save_auto_record(token, record)
@@ -1047,6 +1078,14 @@ def finalize_auto_run(token, runtime, status, error=None, repo_summary=None):
         })
         append_auto_history(state, summary)
         save_auto_record(token, {"config": config, "state": state})
+        if status == "stopped":
+            auto_stopped_results[token] = {
+                "run_id": runtime.get("run_id"),
+                "results": list(runtime.get("results", [])),
+                "expires": time.time() + 900,
+            }
+        else:
+            auto_stopped_results.pop(token, None)
         stored = auto_runtime.get(token)
         if stored and stored.get("run_id") == runtime.get("run_id"):
             stored["finished"] = True
@@ -1711,7 +1750,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             elif self.path == "/api/auto/get":
                 token = sanitize_token(body.get("token", "default"))
-                self._json(200, get_auto_status(token))
+                self._json(200, get_auto_status(token, body.get("since", 0), body.get("session_id", "")))
 
             elif self.path == "/api/auto/save":
                 token = sanitize_token(body.get("token", "default"))
@@ -1734,13 +1773,13 @@ class Handler(SimpleHTTPRequestHandler):
             elif self.path == "/api/auto/stop":
                 token = sanitize_token(body.get("token", "default"))
                 stopped = stop_auto_run(token)
-                response = get_auto_status(token)
+                response = get_auto_status(token, body.get("since", 0), body.get("session_id", ""))
                 response["stopped"] = stopped
                 self._json(200, response)
 
             elif self.path == "/api/auto/status":
                 token = sanitize_token(body.get("token", "default"))
-                self._json(200, get_auto_status(token))
+                self._json(200, get_auto_status(token, body.get("since", 0), body.get("session_id", "")))
 
             elif self.path == "/api/stop":
                 sid = body.get("session_id", "")

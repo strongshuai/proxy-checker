@@ -148,6 +148,8 @@ def main() -> None:
         "function recheckRepo()",
         "function openAutoSettings()",
         "function renderAutoStatus(",
+        "function processAutoRealtimeResults(",
+        "function maybePromptAutoStoppedRepo(",
         "function openAppSettings()",
         "function openRunLogs()",
         "target_profile",
@@ -182,6 +184,8 @@ def main() -> None:
         raise AssertionError(f"logs response missing logs: {logs}")
 
     auto_status = post_json(args.base_url, "/api/auto/status", {"token": "smoke_auto"}, token=token)
+    if "new" not in auto_status or "results_index" not in auto_status:
+        raise AssertionError(f"auto status missing realtime result fields: {auto_status}")
     if capabilities.get("auto_mode"):
         if not auto_status.get("auto_mode") or "config" not in auto_status or "state" not in auto_status:
             raise AssertionError(f"unexpected auto status: {auto_status}")

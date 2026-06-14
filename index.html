@@ -73,7 +73,7 @@ textarea::placeholder{color:#555}
 .empty{text-align:center;padding:40px;color:#444;font-size:13px}
 .copy-btn{padding:4px 10px;border:none;border-radius:5px;background:rgba(124,92,252,.2);color:#a78bfa;font-size:11px;cursor:pointer;opacity:1;transition:background .2s}
 .copy-btn:hover{background:rgba(124,92,252,.4)}
-.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none}
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;opacity:0;transition:all .3s;z-index:1300;pointer-events:none}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .footer{text-align:center;padding:16px;margin-top:10px;border-top:1px solid rgba(255,255,255,.06);color:#555;font-size:12px}
 .footer a{color:#7c5cfc;text-decoration:none;transition:color .2s}
@@ -147,10 +147,10 @@ textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 .detect-menu-item:hover{background:rgba(124,92,252,.15);color:#fff}
 .detect-menu-item .detect-icon{font-size:14px}
 .detect-skip-badge{background:rgba(234,179,8,.15);color:#eab308;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:4px}
-.auto-status-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;background:rgba(255,255,255,.06);color:#888;font-size:11px;font-weight:700;white-space:nowrap}
-.auto-status-badge.running{background:rgba(34,197,94,.13);color:#22c55e}
-.auto-status-badge.waiting{background:rgba(96,165,250,.13);color:#60a5fa}
-.auto-status-badge.error{background:rgba(239,68,68,.13);color:#ef4444}
+.auto-status-badge{--auto-progress:0%;--auto-fill:rgba(255,255,255,.12);--auto-base:rgba(255,255,255,.06);display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;background:linear-gradient(90deg,var(--auto-fill) 0 var(--auto-progress),var(--auto-base) var(--auto-progress) 100%);color:#888;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;transition:background .2s,color .2s}
+.auto-status-badge.running{--auto-fill:rgba(34,197,94,.36);--auto-base:rgba(34,197,94,.13);color:#22c55e}
+.auto-status-badge.waiting{--auto-fill:rgba(96,165,250,.28);--auto-base:rgba(96,165,250,.13);color:#60a5fa}
+.auto-status-badge.error{--auto-fill:rgba(239,68,68,.28);--auto-base:rgba(239,68,68,.13);color:#ef4444}
 .auto-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;margin:16px 0}
 .auto-field{display:flex;flex-direction:column;gap:6px}
 .auto-field label{font-size:12px;color:#888;font-weight:700}

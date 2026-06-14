@@ -27,6 +27,11 @@ var authenticated=false;
 var autoModeAvailable=false;
 var autoStatusTimer=null;
 var autoStatusCache=null;
+var autoResultsIndex=0;
+var autoSessionId='';
+var autoRunResultKeys={};
+var autoStopRequestedSession='';
+var autoStopRepoPromptSession='';
 var appSettings={
   check_rounds:2,
   max_check_rounds:3,
@@ -563,11 +568,55 @@ function appendItem(list,r,type){
 }
 
 function getResultByProxy(proxy){
+  var key=proxyKeyValue(proxy);
   var all=V.concat(U);
   for(var i=0;i<all.length;i++){
-    if(all[i].proxy===proxy)return all[i];
+    if(resultKey(all[i])===key)return all[i];
   }
   return null;
+}
+
+function proxyKeyValue(proxy){
+  return String(proxy||'').trim().toLowerCase().replace(/^[a-z0-9+.-]+:\/\//,'');
+}
+
+function resultKey(r){
+  return proxyKeyValue((r&&r.original)||((r&&r.proxy)||''));
+}
+
+function removeResultByKey(key){
+  V=V.filter(function(r){return resultKey(r)!==key});
+  U=U.filter(function(r){return resultKey(r)!==key});
+  F=F.filter(function(r){return resultKey(r)!==key});
+}
+
+function renderResultLists(){
+  validList.innerHTML='';
+  failList.innerHTML='';
+  V.forEach(function(r){appendItem(validList,r,'valid')});
+  U.forEach(function(r){appendItem(validList,r,'unstable')});
+  F.forEach(function(r){appendItem(failList,r,'invalid')});
+  if(!V.length&&!U.length)validList.innerHTML='<div class="empty">等待检测...</div>';
+  if(!F.length)failList.innerHTML='<div class="empty">等待检测...</div>';
+  applyActiveResultFilters();
+}
+
+function applyActiveResultFilters(){
+  var activeValid=document.querySelector('#vFilters .fbtn.active');
+  var activeInvalid=document.querySelector('#fFilters .fbtn.active');
+  if(activeValid)activeValid.click();
+  if(activeInvalid)activeInvalid.click();
+}
+
+function upsertResult(r){
+  if(!r)return false;
+  var key=resultKey(r);
+  if(!key)return false;
+  removeResultByKey(key);
+  if(r.valid)V.push(r);
+  else if(r.unstable)U.push(r);
+  else F.push(r);
+  return true;
 }
 
 function getResultCountry(r){
@@ -1025,11 +1074,24 @@ function getAutoTimezone(data){
   return (data&&data.config&&data.config.timezone)||appSettings.timezone||'UTC';
 }
 
+function getAutoProgressPercent(data){
+  var state=(data&&data.state)||{};
+  var total=Number(state.total||0);
+  var done=Number(state.done||0);
+  if(!state.running||total<=0)return 0;
+  return Math.max(0,Math.min(100,Math.round(done/total*100)));
+}
+
 function autoStatusText(data){
   var state=(data&&data.state)||{};
   var config=(data&&data.config)||{};
   if(!autoModeAvailable)return '自动不可用';
-  if(state.running)return '自动运行中 '+(state.done||0)+'/'+(state.total||0);
+  if(state.running){
+    if(state.stage==='fetching')return '自动拉取中';
+    if(state.stage==='loading_repo')return '自动合并中';
+    if(state.stage==='stopping')return '自动停止中 '+(state.done||0)+'/'+(state.total||0);
+    return '自动检测中 '+(state.done||0)+'/'+(state.total||0);
+  }
   if(!config.enabled)return '自动未开启';
   if(state.status==='failed')return '自动上次失败';
   if(state.status==='interrupted')return '自动曾中断';
@@ -1044,18 +1106,76 @@ function renderAutoStatus(data){
   if(badge){
     var state=data.state||{};
     var config=data.config||{};
+    var progress=getAutoProgressPercent(data);
     badge.textContent=autoStatusText(data);
+    badge.style.setProperty('--auto-progress',progress+'%');
     badge.className='auto-status-badge';
     if(state.running)badge.classList.add('running');
     else if(config.enabled&&state.status!=='failed'&&state.status!=='interrupted')badge.classList.add('waiting');
     else if(state.status==='failed'||state.status==='interrupted')badge.classList.add('error');
-    badge.title='计划时区: '+getAutoTimezone(data)+'，当前时间: '+((data.server_time&&data.server_time.text)||'-');
+    badge.title='进度: '+progress+'%，已拉取 '+(state.source_count||0)+'，仓库 '+(state.repo_count||0)+'，跳过 '+(state.skipped||0)+'，计划时区: '+getAutoTimezone(data);
   }
   var stopBtn=document.getElementById('autoStopBtn');
   if(stopBtn)stopBtn.disabled=!(data.state&&data.state.running);
   renderAutoProgress(data);
-  if(data.state&&data.state.running)startAutoPolling(2500);
+  if(data.state&&data.state.running)startAutoPolling(data.state.stage==='stopping'?1000:2500);
   else startAutoPolling(10000);
+}
+
+function processAutoRealtimeResults(data){
+  if(!data)return;
+  var state=data.state||{};
+  var sessionId=state.session_id||autoSessionId;
+  if(state.session_id&&state.session_id!==autoSessionId){
+    autoSessionId=state.session_id;
+    autoResultsIndex=0;
+    autoRunResultKeys={};
+    autoStopRepoPromptSession='';
+  }
+  var incoming=Array.isArray(data.new)?data.new:[];
+  var changed=false;
+  if(incoming.length){
+    incoming.forEach(function(result){
+      var key=resultKey(result);
+      if(!key)return;
+      autoRunResultKeys[key]=true;
+      changed=upsertResult(result)||changed;
+    });
+    markCheckedBatch(incoming.map(function(r){return r.original||r.proxy}).filter(Boolean));
+    saveCheckedLocal();
+    syncCheckedToServer();
+  }
+  if(typeof data.results_index==='number')autoResultsIndex=data.results_index;
+  if(changed){
+    renderResultLists();
+    updateStats();
+    saveResults();
+  }
+  if(!state.running&&state.status==='stopped'){
+    maybePromptAutoStoppedRepo(sessionId||autoStopRequestedSession);
+  }
+}
+
+function getCurrentAutoRepoCandidates(){
+  var all=V.concat(U);
+  return all.filter(function(result){
+    return !!autoRunResultKeys[resultKey(result)];
+  });
+}
+
+function maybePromptAutoStoppedRepo(sessionId){
+  var promptKey=sessionId||autoStopRequestedSession;
+  if(!autoStopRequestedSession||!promptKey||autoStopRepoPromptSession===promptKey)return;
+  autoStopRepoPromptSession=promptKey;
+  autoStopRequestedSession='';
+  var candidates=getCurrentAutoRepoCandidates();
+  if(!candidates.length){
+    toast('自动任务已停止，暂无可入库的有效结果');
+    return;
+  }
+  if(!confirm('自动任务已停止，已检测到 '+candidates.length+' 条有效/不稳定代理。是否写入我的仓库并同步云端？'))return;
+  var changed=addRepoItems(candidates.map(resultToRepoItem));
+  toast('已写入仓库: 新增 '+changed.added+' 个，更新 '+changed.updated+' 个');
 }
 
 function startAutoPolling(delay){
@@ -1069,8 +1189,9 @@ function loadAutoStatus(callback){
     if(callback)callback(null);
     return;
   }
-  post('/api/auto/status',{token:getUserToken()},function(err,res){
+  post('/api/auto/status',{token:getUserToken(),since:autoResultsIndex,session_id:autoSessionId},function(err,res){
     if(!err&&res){
+      processAutoRealtimeResults(res);
       renderAutoStatus(res);
       if(callback)callback(res);
     }else if(callback)callback(null);
@@ -1120,7 +1241,7 @@ function renderAutoProgress(data){
   if(config.enabled)html+='<div>下次执行: '+esc(state.next_run_text||formatAutoTime(state.next_run_at,tz))+'</div>';
   if(state.running){
     html+='<div>进度: '+(state.done||0)+'/'+(state.total||0)+'，有效 '+(state.valid_count||0)+'，不稳定 '+(state.unstable_count||0)+'，失效 '+(state.invalid_count||0)+'</div>';
-    html+='<div>来源 '+(state.source_count||0)+'，仓库 '+(state.repo_count||0)+'，跳过 '+(state.skipped||0)+'</div>';
+    html+='<div>已拉取 '+(state.source_count||0)+'，仓库 '+(state.repo_count||0)+'，去重后 '+(state.input_count||0)+'，跳过已检测 '+(state.skipped||0)+'</div>';
   }
   if(state.last_summary){
     var s=state.last_summary;
@@ -1143,11 +1264,12 @@ function openAutoSettings(){
     toast('当前部署不支持后台自动模式');
     return;
   }
-  post('/api/auto/get',{token:getUserToken()},function(err,res){
+  post('/api/auto/get',{token:getUserToken(),since:autoResultsIndex,session_id:autoSessionId},function(err,res){
     if(err||res.error){
       toast(err||res.error||'读取自动模式失败');
       return;
     }
+    processAutoRealtimeResults(res);
     renderAutoStatus(res);
     showAutoModal(res);
   });
@@ -1228,6 +1350,11 @@ function runAutoNow(){
     if(saveErr||saveRes.error){toast('保存失败: '+(saveErr||saveRes.error));return}
     post('/api/auto/run-now',{token:getUserToken()},function(err,res){
       if(err||res.error){toast(err||res.error||'启动失败');if(res)renderAutoStatus(res);return}
+      autoResultsIndex=0;
+      autoSessionId=(res.state&&res.state.session_id)||'';
+      autoRunResultKeys={};
+      autoStopRequestedSession='';
+      autoStopRepoPromptSession='';
       renderAutoStatus(res);
       toast(res.started?'自动任务已启动':'自动任务已在运行');
     });
@@ -1235,8 +1362,11 @@ function runAutoNow(){
 }
 
 function stopAutoNow(){
-  post('/api/auto/stop',{token:getUserToken()},function(err,res){
+  var state=(autoStatusCache&&autoStatusCache.state)||{};
+  autoStopRequestedSession=state.session_id||autoSessionId||('auto_stop_'+Date.now());
+  post('/api/auto/stop',{token:getUserToken(),since:autoResultsIndex,session_id:autoSessionId},function(err,res){
     if(err){toast(err);return}
+    processAutoRealtimeResults(res);
     renderAutoStatus(res);
     toast(res.stopped?'已请求停止自动任务':'当前没有自动任务');
   });
