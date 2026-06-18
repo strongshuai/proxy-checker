@@ -9,6 +9,7 @@
   "detect_timeout": 8,
   "run_log_limit": 100,
   "timezone": "UTC",
+  "generic_target_url": "https://example.com/",
   "port": 8888,
   "log_file": "server.log"
 }

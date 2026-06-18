@@ -47,6 +47,7 @@ var appSettings={
   auth_session_days:7,
   run_log_limit:100,
   timezone:'UTC',
+  generic_target_url:'https://example.com/',
   timezone_options:[{id:'UTC',name:'UTC'}],
   password_configurable:true
 };
@@ -1536,6 +1537,7 @@ function showSettingsModal(settings){
   html+='<div class="auto-field"><label>登录有效天数</label><input id="settingsSessionDays" type="number" min="1" max="365" step="1" value="'+esc(settings.auth_session_days||7)+'"></div>';
   html+='<div class="auto-field"><label>日志保留条数</label><input id="settingsLogLimit" type="number" min="20" max="1000" step="10" value="'+esc(settings.run_log_limit||100)+'"></div>';
   html+='<div class="auto-field full"><label>默认时区</label><select id="settingsTimezone">'+timezoneOptions(settings.timezone||appSettings.timezone)+'</select></div>';
+  html+='<div class="auto-field full"><label>常规检测目标 URL</label><input id="settingsGenericTargetUrl" type="url" placeholder="https://example.com/" value="'+esc(settings.generic_target_url||appSettings.generic_target_url||'https://example.com/')+'"><div class="settings-note">仅影响“常规代理检测”：状态码 2xx/3xx 即视为网页可达；OpenAI、Grok、Gemini、Claude 专项检测不受影响。</div></div>';
   html+='<div class="auto-field full"><label>新登录密码</label><input id="settingsPassword" type="password" autocomplete="new-password" placeholder="'+(settings.password_configurable?'留空表示不修改':'当前由环境变量控制，页面不能永久修改')+'" '+(settings.password_configurable?'':'disabled')+'></div>';
   html+='<div class="auto-field full"><label>确认新密码</label><input id="settingsPasswordConfirm" type="password" autocomplete="new-password" placeholder="再次输入新密码" '+(settings.password_configurable?'':'disabled')+'></div>';
   html+='</div>';
@@ -1570,6 +1572,7 @@ function readSettingsFromModal(){
     auth_session_days:parseInt(document.getElementById('settingsSessionDays').value)||7,
     run_log_limit:parseInt(document.getElementById('settingsLogLimit').value)||100,
     timezone:document.getElementById('settingsTimezone').value||'UTC',
+    generic_target_url:document.getElementById('settingsGenericTargetUrl').value.trim(),
     auth_password:password||''
   };
 }

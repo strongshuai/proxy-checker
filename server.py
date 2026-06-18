@@ -11,13 +11,14 @@ from datetime import datetime, timedelta, timezone
 from http import cookies
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
+from urllib.parse import urlparse
 
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
     ZoneInfo = None
 
-from proxy_check import CheckConfig, DEFAULT_TARGET_CHAT, ProxyCheckEngine, TARGET_PROFILE_OPTIONS
+from proxy_check import CheckConfig, DEFAULT_GENERIC_TARGET, DEFAULT_TARGET_CHAT, ProxyCheckEngine, TARGET_PROFILE_OPTIONS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_LOCAL_PATH = os.path.join(BASE_DIR, "config.local.json")
@@ -50,6 +51,16 @@ def get_config_int(key, env_name, default):
         return int(get_config_value(key, env_name, default))
     except (TypeError, ValueError):
         return default
+
+
+def normalize_target_url(value):
+    """规范化常规检测目标 URL，仅允许 HTTP/HTTPS。"""
+    raw = str(value or "").strip()
+    parsed = urlparse(raw)
+    # 非网页 URL 直接回退默认目标，避免保存后检测链路不可用。
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return DEFAULT_GENERIC_TARGET
+    return raw
 
 # ============================================================
 # My Repository — save/retrieve repo proxies as txt
@@ -140,6 +151,7 @@ AUTH_COOKIE_NAME = "proxy_checker_auth"
 AUTH_SESSION_SECONDS = max(1, AUTH_SESSION_DAYS) * 86400
 AUTH_SESSION_SECRET = str(get_config_value("auth_session_secret", "AUTH_SESSION_SECRET", AUTH_PASSWORD))
 APP_TIMEZONE = str(get_config_value("timezone", "APP_TIMEZONE", "UTC"))
+GENERIC_TARGET_URL = normalize_target_url(get_config_value("generic_target_url", "GENERIC_TARGET_URL", DEFAULT_GENERIC_TARGET))
 MAX_CHECK_ROUNDS = max(1, min(10, MAX_CHECK_ROUNDS))
 CHECK_ROUNDS = max(1, min(MAX_CHECK_ROUNDS, CHECK_ROUNDS))
 RUN_LOG_LIMIT = max(20, min(1000, RUN_LOG_LIMIT))
@@ -152,6 +164,7 @@ check_engine = ProxyCheckEngine(
         timeout=TIMEOUT,
         detect_timeout=DETECT_TIMEOUT,
         check_rounds=CHECK_ROUNDS,
+        generic_target_url=GENERIC_TARGET_URL,
     )
 )
 
@@ -748,6 +761,7 @@ def public_settings_payload():
         "auth_session_days": AUTH_SESSION_DAYS,
         "run_log_limit": RUN_LOG_LIMIT,
         "timezone": APP_TIMEZONE,
+        "generic_target_url": GENERIC_TARGET_URL,
         "port": PORT,
         "timezone_options": list(TIMEZONE_OPTIONS),
         "password_configurable": "AUTH_PASSWORD" not in os.environ,
@@ -758,7 +772,7 @@ def apply_runtime_settings(settings):
     global TIMEOUT, DETECT_TIMEOUT, MAX_CONCURRENT, MAX_CONCURRENT_LIMIT
     global CHECK_ROUNDS, MAX_CHECK_ROUNDS, RUN_LOG_LIMIT, AUTH_PASSWORD
     global AUTH_SESSION_DAYS, AUTH_SESSION_SECONDS, AUTH_SESSION_SECRET
-    global APP_TIMEZONE, check_engine
+    global APP_TIMEZONE, GENERIC_TARGET_URL, check_engine
 
     if not isinstance(settings, dict):
         settings = {}
@@ -772,6 +786,7 @@ def apply_runtime_settings(settings):
     AUTH_SESSION_SECONDS = AUTH_SESSION_DAYS * 86400
     RUN_LOG_LIMIT = max(20, min(1000, get_int_from(settings, "run_log_limit", RUN_LOG_LIMIT)))
     APP_TIMEZONE = normalize_timezone(settings.get("timezone", APP_TIMEZONE))
+    GENERIC_TARGET_URL = normalize_target_url(settings.get("generic_target_url", GENERIC_TARGET_URL))
     new_password = str(settings.get("auth_password") or "").strip()
     password_changed = False
     if new_password and "AUTH_PASSWORD" not in os.environ and new_password != AUTH_PASSWORD:
@@ -784,6 +799,7 @@ def apply_runtime_settings(settings):
             timeout=TIMEOUT,
             detect_timeout=DETECT_TIMEOUT,
             check_rounds=CHECK_ROUNDS,
+            generic_target_url=GENERIC_TARGET_URL,
         )
     )
     return password_changed
@@ -809,6 +825,7 @@ def save_runtime_settings(settings):
         "auth_session_days": AUTH_SESSION_DAYS,
         "run_log_limit": RUN_LOG_LIMIT,
         "timezone": APP_TIMEZONE,
+        "generic_target_url": GENERIC_TARGET_URL,
     })
     if password_changed:
         local_config["auth_password"] = AUTH_PASSWORD

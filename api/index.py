@@ -9,13 +9,14 @@ import threading
 import asyncio
 import hashlib
 import hmac
+from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory, abort, make_response
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from proxy_check import CheckConfig, ProxyCheckEngine, TARGET_PROFILE_OPTIONS
+from proxy_check import CheckConfig, DEFAULT_GENERIC_TARGET, ProxyCheckEngine, TARGET_PROFILE_OPTIONS
 
 app = Flask(__name__, static_folder=None)
 
@@ -56,6 +57,15 @@ def get_config_int(key, env_name, default):
     except (TypeError, ValueError):
         return default
 
+def normalize_target_url(value):
+    """规范化常规检测目标 URL，仅允许 HTTP/HTTPS。"""
+    raw = str(value or "").strip()
+    parsed = urlparse(raw)
+    # Serverless 不保存设置，但仍保持返回值和自托管入口一致。
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return DEFAULT_GENERIC_TARGET
+    return raw
+
 # ============================================================
 # Configuration
 # ============================================================
@@ -68,6 +78,7 @@ MAX_CHECK_ROUNDS = max(1, min(3, get_config_int("max_check_rounds", "MAX_CHECK_R
 CHECK_ROUNDS = max(1, min(MAX_CHECK_ROUNDS, CHECK_ROUNDS))
 RUN_LOG_LIMIT = get_config_int("run_log_limit", "RUN_LOG_LIMIT", 100)
 APP_TIMEZONE = str(get_config_value("timezone", "APP_TIMEZONE", "UTC"))
+GENERIC_TARGET_URL = normalize_target_url(get_config_value("generic_target_url", "GENERIC_TARGET_URL", DEFAULT_GENERIC_TARGET))
 TIMEZONE_OPTIONS = (
     {"id": "UTC", "name": "UTC"},
     {"id": "Asia/Shanghai", "name": "中国/新加坡/马来西亚 UTC+8"},
@@ -87,6 +98,7 @@ check_engine = ProxyCheckEngine(
         timeout=TIMEOUT,
         detect_timeout=DETECT_TIMEOUT,
         check_rounds=CHECK_ROUNDS,
+        generic_target_url=GENERIC_TARGET_URL,
     )
 )
 
@@ -124,6 +136,7 @@ def public_settings_payload():
         "auth_session_days": AUTH_SESSION_DAYS,
         "run_log_limit": RUN_LOG_LIMIT,
         "timezone": APP_TIMEZONE,
+        "generic_target_url": GENERIC_TARGET_URL,
         "timezone_options": list(TIMEZONE_OPTIONS),
         "password_configurable": False,
     }
