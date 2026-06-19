@@ -136,6 +136,11 @@ textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 .modal-overlay.show{display:flex}
 @keyframes modalFadeIn{from{opacity:0}to{opacity:1}}
 .modal-box{background:linear-gradient(160deg,#1e1e3f 0%,#16162e 100%);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:36px 32px;max-width:420px;width:90%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 0 1px rgba(124,92,252,.08);animation:modalBoxIn .16s ease}
+.settings-modal-box{max-height:min(86vh,760px);overflow-y:auto;box-sizing:border-box;overscroll-behavior:contain;scrollbar-gutter:stable}
+.settings-modal-box::-webkit-scrollbar{width:8px}
+.settings-modal-box::-webkit-scrollbar-track{background:rgba(255,255,255,.04);border-radius:4px}
+.settings-modal-box::-webkit-scrollbar-thumb{background:rgba(124,92,252,.35);border-radius:4px}
+.settings-modal-box::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.55)}
 @keyframes modalBoxIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media (prefers-reduced-motion:reduce){.modal-overlay,.modal-box{animation:none!important;transition:none!important}}
 .modal-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px;background:linear-gradient(135deg,rgba(234,179,8,.15),rgba(234,179,8,.05));border:1px solid rgba(234,179,8,.2)}
@@ -165,8 +170,9 @@ textarea::-webkit-scrollbar-thumb:hover{background:rgba(124,92,252,.5)}
 .auto-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;margin:16px 0}
 .auto-field{display:flex;flex-direction:column;gap:6px}
 .auto-field label{font-size:12px;color:#888;font-weight:700}
-.auto-field input,.auto-field select{width:100%;height:38px;padding:0 10px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e0e0e0;font-size:13px}
-.auto-field input:focus,.auto-field select:focus{outline:none;border-color:#7c5cfc}
+.auto-field input,.auto-field select,.auto-field textarea{width:100%;height:38px;padding:0 10px;background:#0d0d1a;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e0e0e0;font-size:13px}
+.auto-field input:focus,.auto-field select:focus,.auto-field textarea:focus{outline:none;border-color:#7c5cfc}
+.auto-field textarea{height:auto;min-height:76px;padding:10px;resize:vertical;line-height:1.5;font-family:inherit}
 .auto-field.full{grid-column:1/-1}
 .auto-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .auto-action-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}

@@ -332,3 +332,25 @@ proxy-checker/
 ## License
 
 MIT License
+
+## Playwright 浏览器真实检测（可选）
+
+普通检测使用 `curl_cffi` 快速验证代理是否能请求目标网页、API 域名和出口 IP；这适合大批量初筛，但不等同于真实浏览器能打开复杂页面。启用 Playwright Browser Check 后，后端会先做快速检测，再对候选代理创建隔离 Chromium BrowserContext，通过该代理真实打开配置的目标页面，并返回 `browser_checked`、`browser_ready`、`usable_for_browser`、`browser_error_type`、标题、最终 URL、失败请求数量等字段。
+
+常用配置：
+
+| 配置项 | 环境变量 | 默认值 | 说明 |
+|---|---|---:|---|
+| `browser_check_enabled` | `BROWSER_CHECK_ENABLED` | `false` | 是否启用 Playwright 浏览器复测 |
+| `browser_check_target_url` | `BROWSER_CHECK_TARGET_URL` | 空 | 浏览器真实打开的目标 URL；为空时使用当前检测模式首页 |
+| `browser_check_concurrent` | `BROWSER_CHECK_CONCURRENT` | `3` | 浏览器复测并发，建议远低于 HTTP 并发 |
+| `browser_check_timeout` | `BROWSER_CHECK_TIMEOUT` | `30` | 浏览器打开页面超时秒数 |
+| `browser_check_strict` | `BROWSER_CHECK_STRICT` | `true` | 严格模式下浏览器失败会把最终结果降为不可推荐 |
+
+本地安装依赖后需要安装 Chromium：
+
+```bash
+python -m playwright install chromium
+```
+
+Docker 镜像构建时会执行 `python -m playwright install --with-deps chromium`。

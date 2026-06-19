@@ -51,6 +51,7 @@ OPENAI_REAL_PAGE_INDICATORS = (
 PROTOCOL_PREFIXES = ("http://", "https://", "socks4://", "socks5://", "socks5h://")
 PROTOCOL_FALLBACK_STATUS_CODES = (200, 401, 403)
 DEFAULT_TARGET_PROFILE = "generic"
+GENERIC_SERVICE_OK_STATUS_CODES = tuple(range(200, 400))
 SERVICE_OK_STATUS_CODES = (200, 204, 301, 302, 303, 307, 308)
 API_OK_STATUS_CODES = (200, 401, 403)
 
@@ -131,6 +132,7 @@ class CheckConfig:
     check_rounds: int
     target_chat: str = DEFAULT_TARGET_CHAT
     target_api: str = DEFAULT_TARGET_API
+    generic_target_url: str = DEFAULT_GENERIC_TARGET
     ip_targets: Tuple[str, ...] = DEFAULT_IP_TARGETS
     ip_info_targets: Tuple[str, ...] = DEFAULT_IP_INFO_TARGETS
     protocol_prefixes: Tuple[str, ...] = PROTOCOL_PREFIXES
@@ -691,6 +693,15 @@ class ProxyCheckEngine:
 
     def _get_profile(self, target_profile: Optional[str]) -> TargetProfile:
         profile_id = target_profile or self.config.default_target_profile
+        if profile_id == DEFAULT_TARGET_PROFILE:
+            base_profile = TARGET_PROFILES[DEFAULT_TARGET_PROFILE]
+            return TargetProfile(
+                id=base_profile.id,
+                name=base_profile.name,
+                service_url=self.config.generic_target_url or DEFAULT_GENERIC_TARGET,
+                service_indicators=(),
+                service_ok_statuses=GENERIC_SERVICE_OK_STATUS_CODES,
+            )
         return TARGET_PROFILES.get(profile_id, TARGET_PROFILES[DEFAULT_TARGET_PROFILE])
 
     def _protocol_failure(self, original: str, rounds: int, profile: TargetProfile) -> Dict[str, object]:
@@ -698,6 +709,7 @@ class ProxyCheckEngine:
             "proxy": original,
             "original": original,
             "valid": False,
+            "http_valid": False,
             "unstable": False,
             "grade": "F",
             "checks_passed": 0,
@@ -717,6 +729,9 @@ class ProxyCheckEngine:
             "cf_indicators": [],
             "registration_ready": False,
             "registration_detail": None,
+            "browser_checked": False,
+            "browser_ready": None,
+            "usable_for_browser": False,
             "recommended_use": "invalid",
             "detected_protocol": None,
             "target_profile": profile.id,
@@ -1094,6 +1109,7 @@ def _build_public_result(
         "proxy": proxy,
         "original": original,
         "valid": summary.valid,
+        "http_valid": summary.valid,
         "unstable": summary.unstable,
         "grade": summary.grade,
         "checks_passed": summary.checks_passed,
@@ -1113,6 +1129,9 @@ def _build_public_result(
         "cf_indicators": result.cf_indicators,
         "registration_ready": result.registration_ready,
         "registration_detail": result.registration_detail,
+        "browser_checked": False,
+        "browser_ready": None,
+        "usable_for_browser": summary.valid,
         "recommended_use": summary.detail.get("recommended_use", "invalid"),
         "detected_protocol": protocol,
         "target_profile": profile.id,

@@ -47,13 +47,28 @@ var appSettings={
   auth_session_days:7,
   run_log_limit:100,
   timezone:'UTC',
+  generic_target_url:'https://example.com/',
+  browser_check_enabled:false,
+  browser_check_available:false,
+  browser_check_timeout:30,
+  browser_check_concurrent:3,
+  browser_check_target_url:'',
+  browser_check_wait_until:'domcontentloaded',
+  browser_check_settle_ms:3000,
+  browser_check_min_body_length:100,
+  browser_check_success_text:[],
+  browser_check_fail_text:['Just a moment','Checking your browser','Verify you are human','Access denied','cf-turnstile','challenge-platform'],
+  browser_check_screenshot_on_fail:false,
+  browser_check_strict:true,
+  browser_check_max_failed_requests:10,
+  browser_check_max_bad_responses:10,
   timezone_options:[{id:'UTC',name:'UTC'}],
   password_configurable:true
 };
 var deepCheckInfo={
   available:false,
-  label:'⚠️ Deep Check不可用',
-  title:'Deep Check 是用真实浏览器复测代理的慢速检查；当前服务器没装这套组件，所以这里只能做普通检测。'
+  label:'⚠️ Browser Check不可用',
+  title:'Browser Check 使用 Playwright Chromium 真实浏览器复测代理；当前服务器没装 Playwright 或浏览器，所以只能做普通检测。'
 };
 var targetProfiles=[
   {id:'generic',name:'常规代理检测',has_api:false,has_signup:false,has_cf_detection:false},
@@ -255,17 +270,17 @@ function checkCapabilities(){
     if(res&&res.settings)applyAppSettings(res.settings);
     updateAutoAvailability(res&&res.auto_mode_hint);
     if(autoModeAvailable&&authenticated)loadAutoStatus();
-    if(res && res.deep_check){
+    if(res && (res.browser_check||res.deep_check)){
       deepCheckInfo={
         available:true,
-        label:'✅ Deep Check可用',
-        title:'Deep Check 已可用：会用真实浏览器再测一次，速度慢一点，但更接近真实访问目标服务的结果。'
+        label:'✅ Browser Check可用',
+        title:'Playwright Browser Check 已可用：启用后会用真实 Chromium 再测一次，更接近浏览器打开目标页面的结果。'
       };
     }else{
       deepCheckInfo={
         available:false,
-        label:'⚠️ Deep Check不可用',
-        title:'Deep Check 是用真实浏览器复测代理的慢速检查；当前服务器没装这套组件，所以这里只能做普通检测。'
+        label:'⚠️ Browser Check不可用',
+        title:'Browser Check 使用 Playwright Chromium 真实浏览器复测代理；当前服务器没装 Playwright 或浏览器，所以只能做普通检测。'
       };
     }
     var badge=document.getElementById("capBadge");
@@ -727,6 +742,8 @@ function getRecommendedUseLabel(use){
     web:'网页可用',
     api:'API可用',
     generic:'基础代理',
+    http_only:'仅HTTP可用',
+    browser:'浏览器可用',
     unstable:'不稳定',
     invalid:'失效'
   };
@@ -739,6 +756,8 @@ function getRecommendedUseTitle(use){
     web:'目标网页能打开，但 API 域名不一定通，适合网页访问。',
     api:'API 域名能连上，适合程序请求；不代表账号、Key 或额度可用。',
     generic:'基础代理能连通并能拿到出口 IP，适合先收进池子再按目标复测。',
+    http_only:'HTTP 快速检测可用，但真实浏览器检测失败；不建议用于浏览器打开页面。',
+    browser:'Playwright 真实浏览器已打开目标页面，适合浏览器访问。',
     unstable:'有成功记录但不稳定，可能受网络波动、代理限速或目标封锁影响。',
     invalid:'这次检测没体现可用价值，通常是连接失败、超时或目标不可达。'
   };
@@ -784,7 +803,10 @@ function tagTitle(kind,value){
     api_unknown:'当前检测模式没有拿到 API 结果，不能据此判断 API 是否可用。',
     checks:'多轮检测通过数/总轮数，数字越接近满分越稳定。',
     latency:'通过这个代理完成检测请求的大致耗时，越低越快，但只代表本次检测。',
-    error:'后端返回的失败原因或 HTTP 状态，仅用于排查，不一定代表代理完全不可用。'
+    error:'后端返回的失败原因或 HTTP 状态，仅用于排查，不一定代表代理完全不可用。',
+    browser_ok:'真实 Chromium 浏览器通过该代理打开了配置的目标页面。',
+    browser_fail:'HTTP 检测可能可用，但真实 Chromium 浏览器打开目标页面失败。',
+    browser_unknown:'未启用浏览器真实检测，当前只代表 HTTP 快速检测结果。'
   };
   return text[kind]||'这个标签是当前检测结果的一项摘要。';
 }
@@ -797,6 +819,26 @@ function tagHTML(className,content,title,style){
   return '<span '+attrs+'>'+content+'</span>';
 }
 
+
+function browserTagHTML(r){
+  if(r.browser_checked===true){
+    if(r.browser_ready===true)return tagHTML('tag-ok','浏览器可用',tagTitle('browser_ok'));
+    return tagHTML('tag-fail','浏览器不可用',tagTitle('browser_fail'));
+  }
+  return tagHTML('', '浏览器未检测', tagTitle('browser_unknown'), 'background:rgba(255,255,255,.06);color:#777');
+}
+
+function textListValue(value){
+  if(Array.isArray(value))return value.join('\n');
+  return String(value||'');
+}
+
+function readTextList(id){
+  var el=document.getElementById(id);
+  if(!el)return [];
+  return el.value.split(/[\n,]+/).map(function(v){return v.trim()}).filter(Boolean);
+}
+
 function itemHTML(r,type){
   var lat=r.latency?r.latency+"ms":"-";
   var spd=r.latency?(r.latency<1000?"speed-fast":r.latency<3000?"speed-mid":"speed-slow"):"";
@@ -807,6 +849,7 @@ function itemHTML(r,type){
   var hasCfDetection=!!profileInfo.has_cf_detection||!!r.cf_challenge;
   var targetTag=r.target_name?tagHTML('',esc(r.target_name),tagTitle('target',r.target_name),'background:rgba(255,255,255,.06);color:#aaa'):'';
   var useTag=r.recommended_use?tagHTML('tag-ok',esc(getRecommendedUseLabel(r.recommended_use)),getRecommendedUseTitle(r.recommended_use)):'';
+  var browserTag=browserTagHTML(r);
   var serviceTag='';
   if(r.service_reachable===true) serviceTag=tagHTML('tag-ok','服务可达',tagTitle('service_ok'));
   else if(r.service_reachable===false) serviceTag=tagHTML('tag-fail','服务不可达',tagTitle('service_fail'));
@@ -866,6 +909,15 @@ function itemHTML(r,type){
     else if(d.chat) rows+='<div class="detail-row"><span class="detail-key">首页:</span><span>'+(d.chat.status||'-')+(d.chat.cf_detected?' <span style="color:#ef4444">CF:'+esc(d.chat.cf_type||'detected')+'</span>':'')+'</span></div>';
     if(d.api) rows+='<div class="detail-row"><span class="detail-key">API域名:</span><span>'+(d.api.status||'-')+' '+(d.api.reachable?'<span style="color:#22c55e">可达</span>':'<span style="color:#ef4444">不可达</span>')+'</span></div>';
     if(d.ip_info) rows+='<div class="detail-row"><span class="detail-key">IP信息:</span><span>'+esc(d.ip_info.org||'')+' ('+esc(d.ip_info.country||'')+')</span></div>';
+    if(r.browser_checked){
+      var bd=r.browser_detail||{};
+      rows+='<div class="detail-row"><span class="detail-key">浏览器:</span><span>'+(r.browser_ready?'<span style="color:#22c55e">可用</span>':'<span style="color:#ef4444">不可用</span>')+(r.browser_status?' HTTP '+esc(r.browser_status):'')+'</span></div>';
+      if(r.browser_title)rows+='<div class="detail-row"><span class="detail-key">标题:</span><span>'+esc(r.browser_title)+'</span></div>';
+      if(r.browser_final_url)rows+='<div class="detail-row"><span class="detail-key">最终URL:</span><span>'+esc(r.browser_final_url)+'</span></div>';
+      if(r.browser_error)rows+='<div class="detail-row"><span class="detail-key">浏览器错误:</span><span style="color:#ef4444">'+esc(r.browser_error_type||'')+' '+esc(r.browser_error)+'</span></div>';
+      rows+='<div class="detail-row"><span class="detail-key">浏览器详情:</span><span>body '+esc(bd.body_length||0)+'，失败请求 '+esc(bd.request_failed_count||0)+'，异常响应 '+esc(bd.bad_response_count||0)+'</span></div>';
+      if(bd.fail_text_matched&&bd.fail_text_matched.length)rows+='<div class="detail-row"><span class="detail-key">失败关键词:</span><span style="color:#ef4444">'+esc(bd.fail_text_matched.join(', '))+'</span></div>';
+    }
     if(r.cf_indicators && r.cf_indicators.length>0) rows+='<div class="detail-row"><span class="detail-key">CF特征:</span><span style="color:#ef4444">'+esc(r.cf_indicators.join(', '))+'</span></div>';
     detailHTML='<div class="detail-panel" id="'+detailId+'">'+rows+'</div>';
   }
@@ -873,7 +925,7 @@ function itemHTML(r,type){
   return '<div class="proxy-item '+type+'" data-lat="'+(r.latency||99999)+'" data-err="'+(err?"y":"n")+'" data-stable="'+(r.valid?"y":r.unstable?"u":"n")+'" data-service="'+(r.service_reachable?"y":"n")+'" data-api="'+(r.api_reachable===true?"y":"n")+'" data-ip="'+(r.ip?"y":"n")+'" data-cf="'+(r.cf_bypass?"y":"n")+'" data-cf-challenge="'+(r.cf_challenge_type||"")+'" data-grade="'+g+'" data-ip-type="'+(r.ip_type||"")+'" data-country="'+(country?"y":"n")+'" onclick="toggleDetail(\''+detailId+'\')">'+
     '<div style="flex:1;min-width:0">'+
     '<div class="proxy-addr">'+esc(r.proxy)+'</div>'+
-    '<div class="proxy-meta">'+targetTag+gradeTag+useTag+chkTag+serviceTag+cfTag+ipTag+countryTag+ipTypeTag+apiTag+errTag+'</div>'+
+    '<div class="proxy-meta">'+targetTag+gradeTag+useTag+chkTag+serviceTag+browserTag+cfTag+ipTag+countryTag+ipTypeTag+apiTag+errTag+'</div>'+
     detailHTML+
     '</div>'+
     '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'+
@@ -1090,6 +1142,10 @@ function compactRepoItem(p){
   if(p.api_reachable===true)item.api_reachable=true;
   if(p.cf_bypass)item.cf_bypass=true;
   if(p.recommended_use)item.recommended_use=p.recommended_use;
+  if(p.http_valid!==undefined)item.http_valid=!!p.http_valid;
+  if(p.browser_checked!==undefined)item.browser_checked=!!p.browser_checked;
+  if(p.browser_ready!==undefined&&p.browser_ready!==null)item.browser_ready=!!p.browser_ready;
+  if(p.usable_for_browser!==undefined)item.usable_for_browser=!!p.usable_for_browser;
   if(p.target_profile)item.target_profile=p.target_profile;
   if(p.target_name)item.target_name=p.target_name;
   item.added=p.added||Date.now();
@@ -1522,11 +1578,11 @@ function showSettingsModal(settings){
   overlay.className='modal-overlay show';
   overlay.dataset.modal='settings';
   overlay.onclick=function(e){if(e.target===overlay)overlay.remove()};
-  var html='<div class="modal-box" style="max-width:720px;text-align:left">';
+  var html='<div class="modal-box settings-modal-box" style="max-width:720px;text-align:left">';
   html+='<div class="modal-icon" style="background:linear-gradient(135deg,rgba(124,92,252,.16),rgba(124,92,252,.05));border-color:rgba(124,92,252,.22)">⚙️</div>';
   html+='<h3 style="text-align:center">设置</h3>';
   html+='<div class="settings-note">这里保存的是服务运行参数。轮次默认最多 3 轮，轮次越高越慢；并发越高越快，但服务器和代理源压力也越大。</div>';
-  html+='<div class="settings-note" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span>Deep Check 状态</span>'+deepCheckBadgeHTML()+'</div>';
+  html+='<div class="settings-note" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span>Playwright Browser Check 状态</span>'+deepCheckBadgeHTML()+'</div>';
   html+='<div class="auto-form">';
   html+='<div class="auto-field"><label>检测轮次</label><select id="settingsRounds">'+settingsRoundsOptions(settings.check_rounds)+'</select></div>';
   html+='<div class="auto-field"><label>默认并发</label><input id="settingsConcurrent" type="number" min="1" max="'+esc(settings.max_concurrent_limit||200)+'" step="1" value="'+esc(settings.max_concurrent||30)+'"></div>';
@@ -1536,6 +1592,19 @@ function showSettingsModal(settings){
   html+='<div class="auto-field"><label>登录有效天数</label><input id="settingsSessionDays" type="number" min="1" max="365" step="1" value="'+esc(settings.auth_session_days||7)+'"></div>';
   html+='<div class="auto-field"><label>日志保留条数</label><input id="settingsLogLimit" type="number" min="20" max="1000" step="10" value="'+esc(settings.run_log_limit||100)+'"></div>';
   html+='<div class="auto-field full"><label>默认时区</label><select id="settingsTimezone">'+timezoneOptions(settings.timezone||appSettings.timezone)+'</select></div>';
+  html+='<div class="auto-field full"><label>常规检测目标 URL</label><input id="settingsGenericTargetUrl" type="url" placeholder="https://example.com/" value="'+esc(settings.generic_target_url||appSettings.generic_target_url||'https://example.com/')+'"><div class="settings-note">仅影响“常规代理检测”：状态码 2xx/3xx 即视为网页可达；OpenAI、Grok、Gemini、Claude 专项检测不受影响。</div></div>';
+  html+='<div class="auto-field full"><label><input id="settingsBrowserEnabled" type="checkbox" '+(settings.browser_check_enabled?'checked':'')+' style="width:auto;height:auto;margin-right:8px">启用 Playwright 浏览器真实检测</label><div class="settings-note">启用后会对 HTTP 候选代理再用真实 Chromium 打开目标页面；速度较慢，但结果更接近浏览器使用。</div></div>';
+  html+='<div class="auto-field full"><label>浏览器检测目标 URL</label><input id="settingsBrowserTargetUrl" type="url" value="'+esc(settings.browser_check_target_url||'')+'"></div>';
+  html+='<div class="auto-field"><label>浏览器并发</label><input id="settingsBrowserConcurrent" type="number" min="1" max="50" step="1" value="'+esc(settings.browser_check_concurrent||3)+'"></div>';
+  html+='<div class="auto-field"><label>浏览器超时（秒）</label><input id="settingsBrowserTimeout" type="number" min="3" max="120" step="1" value="'+esc(settings.browser_check_timeout||30)+'"></div>';
+  html+='<div class="auto-field"><label>页面稳定等待（毫秒）</label><input id="settingsBrowserSettleMs" type="number" min="0" max="30000" step="500" value="'+esc(settings.browser_check_settle_ms||3000)+'"></div>';
+  html+='<div class="auto-field"><label>最小正文长度</label><input id="settingsBrowserMinBody" type="number" min="0" max="100000" step="10" value="'+esc(settings.browser_check_min_body_length||100)+'"></div>';
+  html+='<div class="auto-field"><label>失败请求上限</label><input id="settingsBrowserMaxFailed" type="number" min="0" max="1000" step="1" value="'+esc(settings.browser_check_max_failed_requests||10)+'"></div>';
+  html+='<div class="auto-field"><label>异常响应上限</label><input id="settingsBrowserMaxBad" type="number" min="0" max="1000" step="1" value="'+esc(settings.browser_check_max_bad_responses||10)+'"></div>';
+  html+='<div class="auto-field full"><label>成功关键词（可选，每行一个）</label><textarea id="settingsBrowserSuccessText" rows="3" placeholder="例如：Sign in">'+esc(textListValue(settings.browser_check_success_text))+'</textarea></div>';
+  html+='<div class="auto-field full"><label>失败关键词（每行一个）</label><textarea id="settingsBrowserFailText" rows="4">'+esc(textListValue(settings.browser_check_fail_text||appSettings.browser_check_fail_text))+'</textarea></div>';
+  html+='<div class="auto-field full"><label><input id="settingsBrowserStrict" type="checkbox" '+(settings.browser_check_strict!==false?'checked':'')+' style="width:auto;height:auto;margin-right:8px">严格模式：浏览器失败则最终不推荐使用</label></div>';
+  html+='<div class="auto-field full"><label><input id="settingsBrowserScreenshot" type="checkbox" '+(settings.browser_check_screenshot_on_fail?'checked':'')+' style="width:auto;height:auto;margin-right:8px">失败时保存截图</label></div>';
   html+='<div class="auto-field full"><label>新登录密码</label><input id="settingsPassword" type="password" autocomplete="new-password" placeholder="'+(settings.password_configurable?'留空表示不修改':'当前由环境变量控制，页面不能永久修改')+'" '+(settings.password_configurable?'':'disabled')+'></div>';
   html+='<div class="auto-field full"><label>确认新密码</label><input id="settingsPasswordConfirm" type="password" autocomplete="new-password" placeholder="再次输入新密码" '+(settings.password_configurable?'':'disabled')+'></div>';
   html+='</div>';
@@ -1570,6 +1639,19 @@ function readSettingsFromModal(){
     auth_session_days:parseInt(document.getElementById('settingsSessionDays').value)||7,
     run_log_limit:parseInt(document.getElementById('settingsLogLimit').value)||100,
     timezone:document.getElementById('settingsTimezone').value||'UTC',
+    generic_target_url:document.getElementById('settingsGenericTargetUrl').value.trim(),
+    browser_check_enabled:!!document.getElementById('settingsBrowserEnabled').checked,
+    browser_check_target_url:document.getElementById('settingsBrowserTargetUrl').value.trim(),
+    browser_check_concurrent:parseInt(document.getElementById('settingsBrowserConcurrent').value)||3,
+    browser_check_timeout:parseInt(document.getElementById('settingsBrowserTimeout').value)||30,
+    browser_check_settle_ms:parseInt(document.getElementById('settingsBrowserSettleMs').value)||0,
+    browser_check_min_body_length:parseInt(document.getElementById('settingsBrowserMinBody').value)||0,
+    browser_check_success_text:readTextList('settingsBrowserSuccessText'),
+    browser_check_fail_text:readTextList('settingsBrowserFailText'),
+    browser_check_screenshot_on_fail:!!document.getElementById('settingsBrowserScreenshot').checked,
+    browser_check_strict:!!document.getElementById('settingsBrowserStrict').checked,
+    browser_check_max_failed_requests:parseInt(document.getElementById('settingsBrowserMaxFailed').value)||0,
+    browser_check_max_bad_responses:parseInt(document.getElementById('settingsBrowserMaxBad').value)||0,
     auth_password:password||''
   };
 }
@@ -1931,6 +2013,10 @@ function resultToRepoItem(r){
     api_reachable:r.api_reachable,
     cf_bypass:r.cf_bypass,
     recommended_use:r.recommended_use,
+    http_valid:r.http_valid,
+    browser_checked:r.browser_checked,
+    browser_ready:r.browser_ready,
+    usable_for_browser:r.usable_for_browser,
     target_profile:r.target_profile||currentTargetProfile,
     target_name:r.target_name||getTargetProfileInfo(currentTargetProfile).name,
     added:Date.now(),
@@ -2023,6 +2109,7 @@ function renderRepo(){
       (p.target_name?tagHTML('',esc(p.target_name),tagTitle('target',p.target_name),'background:rgba(255,255,255,.06);color:#aaa'):'')+
       tagHTML('','等级'+esc(g),getGradeTitle(g),'background:rgba(0,0,0,.3);color:'+(gradeColors[g]||'#888')+';font-weight:700')+
       (p.recommended_use?tagHTML('tag-ok',esc(getRecommendedUseLabel(p.recommended_use)),getRecommendedUseTitle(p.recommended_use)):'')+
+      browserTagHTML(p)+
       (p.service_reachable===true?tagHTML('tag-ok','服务可达',tagTitle('service_ok')):'')+
       (p.api_reachable===true?tagHTML('tag-ok','API域名可达',tagTitle('api_ok')):'')+
       (country?tagHTML('tag-country','国家: '+esc(country),tagTitle('country')):'')+

@@ -11,13 +11,24 @@ from datetime import datetime, timedelta, timezone
 from http import cookies
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
+from urllib.parse import urlparse
 
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
     ZoneInfo = None
 
-from proxy_check import CheckConfig, DEFAULT_TARGET_CHAT, ProxyCheckEngine, TARGET_PROFILE_OPTIONS
+from proxy_check import CheckConfig, DEFAULT_GENERIC_TARGET, DEFAULT_TARGET_CHAT, ProxyCheckEngine, TARGET_PROFILE_OPTIONS, TARGET_PROFILES
+from browser_check import (
+    BrowserCheckConfig,
+    BrowserCheckEngine,
+    PLAYWRIGHT_AVAILABLE,
+    apply_browser_result_to_proxy_result,
+    default_browser_fields,
+    parse_text_list,
+    run_browser_check_sync,
+    should_browser_check_result,
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_LOCAL_PATH = os.path.join(BASE_DIR, "config.local.json")
@@ -51,6 +62,65 @@ def get_config_int(key, env_name, default):
     except (TypeError, ValueError):
         return default
 
+
+def normalize_target_url(value):
+    """规范化常规检测目标 URL，仅允许 HTTP/HTTPS。"""
+    raw = str(value or "").strip()
+    parsed = urlparse(raw)
+    # 非网页 URL 直接回退默认目标，避免保存后检测链路不可用。
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return DEFAULT_GENERIC_TARGET
+    return raw
+
+
+def normalize_optional_target_url(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return ""
+    return raw
+
+
+def get_config_bool(key, env_name, default):
+    value = get_config_value(key, env_name, default)
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on", "y"):
+        return True
+    if text in ("0", "false", "no", "off", "n"):
+        return False
+    return bool(default)
+
+
+def get_config_text_tuple(key, env_name, default):
+    return parse_text_list(get_config_value(key, env_name, default))
+
+
+def get_bool_from(data, key, default):
+    try:
+        value = data.get(key, default)
+    except AttributeError:
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on", "y"):
+        return True
+    if text in ("0", "false", "no", "off", "n"):
+        return False
+    return bool(default)
+
+
+def get_text_tuple_from(data, key, default):
+    try:
+        value = data.get(key, default)
+    except AttributeError:
+        return tuple(default or ())
+    return parse_text_list(value)
+
 # ============================================================
 # My Repository — save/retrieve repo proxies as txt
 # ============================================================
@@ -76,13 +146,8 @@ try:
 except ImportError:
     FETCH_PROXIES_AVAILABLE = False
 
-# === Try to import nodriver for deep check ===
-NODRIVER_AVAILABLE = False
-try:
-    import nodriver
-    NODRIVER_AVAILABLE = True
-except ImportError:
-    pass
+# === Playwright Browser Check availability ===
+BROWSER_CHECK_AVAILABLE = PLAYWRIGHT_AVAILABLE
 
 # === Try to install Xvfb for headless Chrome ===
 XVFB_AVAILABLE = False
@@ -140,9 +205,33 @@ AUTH_COOKIE_NAME = "proxy_checker_auth"
 AUTH_SESSION_SECONDS = max(1, AUTH_SESSION_DAYS) * 86400
 AUTH_SESSION_SECRET = str(get_config_value("auth_session_secret", "AUTH_SESSION_SECRET", AUTH_PASSWORD))
 APP_TIMEZONE = str(get_config_value("timezone", "APP_TIMEZONE", "UTC"))
+GENERIC_TARGET_URL = normalize_target_url(get_config_value("generic_target_url", "GENERIC_TARGET_URL", DEFAULT_GENERIC_TARGET))
+BROWSER_CHECK_ENABLED = get_config_bool("browser_check_enabled", "BROWSER_CHECK_ENABLED", False)
+BROWSER_CHECK_TIMEOUT = get_config_int("browser_check_timeout", "BROWSER_CHECK_TIMEOUT", 30)
+BROWSER_CHECK_CONCURRENT = get_config_int("browser_check_concurrent", "BROWSER_CHECK_CONCURRENT", 3)
+BROWSER_CHECK_TARGET_URL = normalize_optional_target_url(get_config_value("browser_check_target_url", "BROWSER_CHECK_TARGET_URL", ""))
+BROWSER_CHECK_WAIT_UNTIL = str(get_config_value("browser_check_wait_until", "BROWSER_CHECK_WAIT_UNTIL", "domcontentloaded"))
+BROWSER_CHECK_SETTLE_MS = get_config_int("browser_check_settle_ms", "BROWSER_CHECK_SETTLE_MS", 3000)
+BROWSER_CHECK_MIN_BODY_LENGTH = get_config_int("browser_check_min_body_length", "BROWSER_CHECK_MIN_BODY_LENGTH", 100)
+BROWSER_CHECK_SUCCESS_TEXT = get_config_text_tuple("browser_check_success_text", "BROWSER_CHECK_SUCCESS_TEXT", ())
+BROWSER_CHECK_FAIL_TEXT = get_config_text_tuple("browser_check_fail_text", "BROWSER_CHECK_FAIL_TEXT", (
+    "Just a moment", "Checking your browser", "Verify you are human", "Access denied", "cf-turnstile", "challenge-platform"
+))
+BROWSER_CHECK_SCREENSHOT_ON_FAIL = get_config_bool("browser_check_screenshot_on_fail", "BROWSER_CHECK_SCREENSHOT_ON_FAIL", False)
+BROWSER_CHECK_STRICT = get_config_bool("browser_check_strict", "BROWSER_CHECK_STRICT", True)
+BROWSER_CHECK_MAX_FAILED_REQUESTS = get_config_int("browser_check_max_failed_requests", "BROWSER_CHECK_MAX_FAILED_REQUESTS", 10)
+BROWSER_CHECK_MAX_BAD_RESPONSES = get_config_int("browser_check_max_bad_responses", "BROWSER_CHECK_MAX_BAD_RESPONSES", 10)
 MAX_CHECK_ROUNDS = max(1, min(10, MAX_CHECK_ROUNDS))
 CHECK_ROUNDS = max(1, min(MAX_CHECK_ROUNDS, CHECK_ROUNDS))
 RUN_LOG_LIMIT = max(20, min(1000, RUN_LOG_LIMIT))
+BROWSER_CHECK_TIMEOUT = max(3, min(120, BROWSER_CHECK_TIMEOUT))
+BROWSER_CHECK_CONCURRENT = max(1, min(50, BROWSER_CHECK_CONCURRENT))
+BROWSER_CHECK_SETTLE_MS = max(0, min(30000, BROWSER_CHECK_SETTLE_MS))
+BROWSER_CHECK_MIN_BODY_LENGTH = max(0, min(100000, BROWSER_CHECK_MIN_BODY_LENGTH))
+BROWSER_CHECK_MAX_FAILED_REQUESTS = max(0, min(1000, BROWSER_CHECK_MAX_FAILED_REQUESTS))
+BROWSER_CHECK_MAX_BAD_RESPONSES = max(0, min(1000, BROWSER_CHECK_MAX_BAD_RESPONSES))
+if BROWSER_CHECK_WAIT_UNTIL not in ("commit", "domcontentloaded", "load", "networkidle"):
+    BROWSER_CHECK_WAIT_UNTIL = "domcontentloaded"
 if APP_TIMEZONE not in TIMEZONE_IDS:
     APP_TIMEZONE = "UTC"
 
@@ -152,6 +241,7 @@ check_engine = ProxyCheckEngine(
         timeout=TIMEOUT,
         detect_timeout=DETECT_TIMEOUT,
         check_rounds=CHECK_ROUNDS,
+        generic_target_url=GENERIC_TARGET_URL,
     )
 )
 
@@ -748,6 +838,21 @@ def public_settings_payload():
         "auth_session_days": AUTH_SESSION_DAYS,
         "run_log_limit": RUN_LOG_LIMIT,
         "timezone": APP_TIMEZONE,
+        "generic_target_url": GENERIC_TARGET_URL,
+        "browser_check_enabled": BROWSER_CHECK_ENABLED,
+        "browser_check_available": BROWSER_CHECK_AVAILABLE,
+        "browser_check_timeout": BROWSER_CHECK_TIMEOUT,
+        "browser_check_concurrent": BROWSER_CHECK_CONCURRENT,
+        "browser_check_target_url": BROWSER_CHECK_TARGET_URL,
+        "browser_check_wait_until": BROWSER_CHECK_WAIT_UNTIL,
+        "browser_check_settle_ms": BROWSER_CHECK_SETTLE_MS,
+        "browser_check_min_body_length": BROWSER_CHECK_MIN_BODY_LENGTH,
+        "browser_check_success_text": list(BROWSER_CHECK_SUCCESS_TEXT),
+        "browser_check_fail_text": list(BROWSER_CHECK_FAIL_TEXT),
+        "browser_check_screenshot_on_fail": BROWSER_CHECK_SCREENSHOT_ON_FAIL,
+        "browser_check_strict": BROWSER_CHECK_STRICT,
+        "browser_check_max_failed_requests": BROWSER_CHECK_MAX_FAILED_REQUESTS,
+        "browser_check_max_bad_responses": BROWSER_CHECK_MAX_BAD_RESPONSES,
         "port": PORT,
         "timezone_options": list(TIMEZONE_OPTIONS),
         "password_configurable": "AUTH_PASSWORD" not in os.environ,
@@ -758,7 +863,12 @@ def apply_runtime_settings(settings):
     global TIMEOUT, DETECT_TIMEOUT, MAX_CONCURRENT, MAX_CONCURRENT_LIMIT
     global CHECK_ROUNDS, MAX_CHECK_ROUNDS, RUN_LOG_LIMIT, AUTH_PASSWORD
     global AUTH_SESSION_DAYS, AUTH_SESSION_SECONDS, AUTH_SESSION_SECRET
-    global APP_TIMEZONE, check_engine
+    global APP_TIMEZONE, GENERIC_TARGET_URL, check_engine
+    global BROWSER_CHECK_ENABLED, BROWSER_CHECK_TIMEOUT, BROWSER_CHECK_CONCURRENT
+    global BROWSER_CHECK_TARGET_URL, BROWSER_CHECK_WAIT_UNTIL, BROWSER_CHECK_SETTLE_MS
+    global BROWSER_CHECK_MIN_BODY_LENGTH, BROWSER_CHECK_SUCCESS_TEXT, BROWSER_CHECK_FAIL_TEXT
+    global BROWSER_CHECK_SCREENSHOT_ON_FAIL, BROWSER_CHECK_STRICT
+    global BROWSER_CHECK_MAX_FAILED_REQUESTS, BROWSER_CHECK_MAX_BAD_RESPONSES
 
     if not isinstance(settings, dict):
         settings = {}
@@ -772,6 +882,24 @@ def apply_runtime_settings(settings):
     AUTH_SESSION_SECONDS = AUTH_SESSION_DAYS * 86400
     RUN_LOG_LIMIT = max(20, min(1000, get_int_from(settings, "run_log_limit", RUN_LOG_LIMIT)))
     APP_TIMEZONE = normalize_timezone(settings.get("timezone", APP_TIMEZONE))
+    GENERIC_TARGET_URL = normalize_target_url(settings.get("generic_target_url", GENERIC_TARGET_URL))
+    BROWSER_CHECK_ENABLED = get_bool_from(settings, "browser_check_enabled", BROWSER_CHECK_ENABLED)
+    BROWSER_CHECK_TIMEOUT = normalize_timeout(settings.get("browser_check_timeout"), BROWSER_CHECK_TIMEOUT)
+    BROWSER_CHECK_CONCURRENT = max(1, min(50, get_int_from(settings, "browser_check_concurrent", BROWSER_CHECK_CONCURRENT)))
+    BROWSER_CHECK_TARGET_URL = normalize_optional_target_url(settings.get("browser_check_target_url", BROWSER_CHECK_TARGET_URL))
+    BROWSER_CHECK_WAIT_UNTIL = str(settings.get("browser_check_wait_until") or BROWSER_CHECK_WAIT_UNTIL)
+    if BROWSER_CHECK_WAIT_UNTIL not in ("commit", "domcontentloaded", "load", "networkidle"):
+        BROWSER_CHECK_WAIT_UNTIL = "domcontentloaded"
+    BROWSER_CHECK_SETTLE_MS = max(0, min(30000, get_int_from(settings, "browser_check_settle_ms", BROWSER_CHECK_SETTLE_MS)))
+    BROWSER_CHECK_MIN_BODY_LENGTH = max(0, min(100000, get_int_from(settings, "browser_check_min_body_length", BROWSER_CHECK_MIN_BODY_LENGTH)))
+    BROWSER_CHECK_SUCCESS_TEXT = get_text_tuple_from(settings, "browser_check_success_text", BROWSER_CHECK_SUCCESS_TEXT)
+    BROWSER_CHECK_FAIL_TEXT = get_text_tuple_from(settings, "browser_check_fail_text", BROWSER_CHECK_FAIL_TEXT)
+    if not BROWSER_CHECK_FAIL_TEXT:
+        BROWSER_CHECK_FAIL_TEXT = ("Just a moment", "Checking your browser", "Verify you are human", "Access denied", "cf-turnstile", "challenge-platform")
+    BROWSER_CHECK_SCREENSHOT_ON_FAIL = get_bool_from(settings, "browser_check_screenshot_on_fail", BROWSER_CHECK_SCREENSHOT_ON_FAIL)
+    BROWSER_CHECK_STRICT = get_bool_from(settings, "browser_check_strict", BROWSER_CHECK_STRICT)
+    BROWSER_CHECK_MAX_FAILED_REQUESTS = max(0, min(1000, get_int_from(settings, "browser_check_max_failed_requests", BROWSER_CHECK_MAX_FAILED_REQUESTS)))
+    BROWSER_CHECK_MAX_BAD_RESPONSES = max(0, min(1000, get_int_from(settings, "browser_check_max_bad_responses", BROWSER_CHECK_MAX_BAD_RESPONSES)))
     new_password = str(settings.get("auth_password") or "").strip()
     password_changed = False
     if new_password and "AUTH_PASSWORD" not in os.environ and new_password != AUTH_PASSWORD:
@@ -784,6 +912,7 @@ def apply_runtime_settings(settings):
             timeout=TIMEOUT,
             detect_timeout=DETECT_TIMEOUT,
             check_rounds=CHECK_ROUNDS,
+            generic_target_url=GENERIC_TARGET_URL,
         )
     )
     return password_changed
@@ -809,11 +938,104 @@ def save_runtime_settings(settings):
         "auth_session_days": AUTH_SESSION_DAYS,
         "run_log_limit": RUN_LOG_LIMIT,
         "timezone": APP_TIMEZONE,
+        "generic_target_url": GENERIC_TARGET_URL,
+        "browser_check_enabled": BROWSER_CHECK_ENABLED,
+        "browser_check_timeout": BROWSER_CHECK_TIMEOUT,
+        "browser_check_concurrent": BROWSER_CHECK_CONCURRENT,
+        "browser_check_target_url": BROWSER_CHECK_TARGET_URL,
+        "browser_check_wait_until": BROWSER_CHECK_WAIT_UNTIL,
+        "browser_check_settle_ms": BROWSER_CHECK_SETTLE_MS,
+        "browser_check_min_body_length": BROWSER_CHECK_MIN_BODY_LENGTH,
+        "browser_check_success_text": list(BROWSER_CHECK_SUCCESS_TEXT),
+        "browser_check_fail_text": list(BROWSER_CHECK_FAIL_TEXT),
+        "browser_check_screenshot_on_fail": BROWSER_CHECK_SCREENSHOT_ON_FAIL,
+        "browser_check_strict": BROWSER_CHECK_STRICT,
+        "browser_check_max_failed_requests": BROWSER_CHECK_MAX_FAILED_REQUESTS,
+        "browser_check_max_bad_responses": BROWSER_CHECK_MAX_BAD_RESPONSES,
     })
     if password_changed:
         local_config["auth_password"] = AUTH_PASSWORD
     write_local_config(local_config)
     return password_changed
+
+
+def target_profile_service_url(target_profile):
+    profile_id = normalize_target_profile(target_profile)
+    if profile_id == "generic":
+        return GENERIC_TARGET_URL
+    profile = TARGET_PROFILES.get(profile_id)
+    return profile.service_url if profile is not None else GENERIC_TARGET_URL
+
+
+def build_browser_check_config(default_target_url=""):
+    target = BROWSER_CHECK_TARGET_URL or normalize_optional_target_url(default_target_url)
+    return BrowserCheckConfig(
+        enabled=BROWSER_CHECK_ENABLED,
+        timeout=BROWSER_CHECK_TIMEOUT,
+        concurrent=BROWSER_CHECK_CONCURRENT,
+        target_url=target,
+        wait_until=BROWSER_CHECK_WAIT_UNTIL,
+        settle_ms=BROWSER_CHECK_SETTLE_MS,
+        min_body_length=BROWSER_CHECK_MIN_BODY_LENGTH,
+        success_text=BROWSER_CHECK_SUCCESS_TEXT,
+        fail_text=BROWSER_CHECK_FAIL_TEXT,
+        screenshot_on_fail=BROWSER_CHECK_SCREENSHOT_ON_FAIL,
+        strict=BROWSER_CHECK_STRICT,
+        max_failed_requests=BROWSER_CHECK_MAX_FAILED_REQUESTS,
+        max_bad_responses=BROWSER_CHECK_MAX_BAD_RESPONSES,
+    ).normalized()
+
+
+def _is_stop_event_set(stop_event):
+    return bool(stop_event and stop_event.is_set())
+
+
+async def run_proxy_checks_with_optional_browser(
+    *,
+    proxies,
+    stop_event,
+    rounds,
+    max_concurrent,
+    on_result,
+    target_profile,
+):
+    browser_config = build_browser_check_config(target_profile_service_url(target_profile))
+    if not browser_config.enabled:
+        await check_engine.check_many_async(
+            proxies=proxies,
+            stop_event=stop_event,
+            rounds=rounds,
+            max_concurrent=max_concurrent,
+            on_result=lambda result: on_result(default_browser_fields(result)),
+            target_profile=target_profile,
+        )
+        return
+
+    tasks = []
+    async with BrowserCheckEngine(browser_config) as browser_engine:
+        async def enrich_and_publish(result):
+            if not result:
+                return
+            base = default_browser_fields(result)
+            if _is_stop_event_set(stop_event) or not should_browser_check_result(base):
+                on_result(base)
+                return
+            browser_result = await browser_engine.check_proxy(str(base.get("proxy") or ""), target_url=browser_config.target_url)
+            on_result(apply_browser_result_to_proxy_result(base, browser_result, strict=browser_config.strict))
+
+        def schedule_result(result):
+            tasks.append(asyncio.create_task(enrich_and_publish(result)))
+
+        await check_engine.check_many_async(
+            proxies=proxies,
+            stop_event=stop_event,
+            rounds=rounds,
+            max_concurrent=max_concurrent,
+            on_result=schedule_result,
+            target_profile=target_profile,
+        )
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=False)
 
 # ============================================================
 # Session cleanup
@@ -1202,7 +1424,7 @@ def execute_auto_run(token, config, run_id, reason):
 
         if to_check:
             async def run_async():
-                await check_engine.check_many_async(
+                await run_proxy_checks_with_optional_browser(
                     proxies=to_check,
                     stop_event=runtime["stop"],
                     rounds=config["rounds"],
@@ -1441,85 +1663,6 @@ def start_auto_scheduler():
     threading.Thread(target=scheduler_loop, daemon=True).start()
 
 # ============================================================
-# Deep Check (optional, requires nodriver + Chrome)
-# ============================================================
-async def deep_check_nodriver(proxy_str, target_url, timeout=20):
-    """
-    Use nodriver (real browser) to verify proxy can bypass CF.
-    Returns: (success, details)
-    """
-    if not NODRIVER_AVAILABLE:
-        return False, {"error": "nodriver not installed"}
-
-    browser = None
-    try:
-        # Configure nodriver with proxy
-        config = nodriver.Config()
-        config.add_argument(f"--proxy-server={proxy_str}")
-        config.add_argument("--no-sandbox")
-        config.add_argument("--disable-dev-shm-usage")
-        config.headless = True
-
-        browser = await nodriver.start(config=config)
-        page = await browser.get(target_url)
-
-        # Wait for page to load
-        await asyncio.sleep(5)
-
-        # Check page content
-        title = await page.evaluate("document.title")
-        body_text = await page.evaluate("document.body.innerText.substring(0, 2000)")
-
-        # Check for CF challenge
-        cf_detected = False
-        cf_type = None
-        for indicator in ["Just a moment", "Checking your browser", "Verify you are human", "challenge-platform"]:
-            if indicator.lower() in body_text.lower():
-                cf_detected = True
-                if "turnstile" in body_text.lower():
-                    cf_type = "turnstile"
-                elif "just a moment" in body_text.lower():
-                    cf_type = "js"
-                else:
-                    cf_type = "managed"
-                break
-
-        has_content = any(kw in body_text.lower() for kw in ["chatgpt", "chat.openai.com", "log in", "sign up"])
-
-        return True, {
-            "title": title,
-            "body_preview": body_text[:500],
-            "cf_detected": cf_detected,
-            "cf_type": cf_type,
-            "has_real_content": has_content,
-            "success": has_content and not cf_detected,
-        }
-
-    except Exception as e:
-        return False, {"error": str(e)[:200]}
-    finally:
-        if browser:
-            try:
-                await browser.stop()
-            except Exception:
-                pass
-
-def run_deep_check(proxy_str, target_url=None):
-    """Synchronous wrapper for deep check."""
-    if not NODRIVER_AVAILABLE:
-        return {"error": "nodriver not installed", "success": False}
-
-    target = target_url or TARGET_CHAT
-    loop = asyncio.new_event_loop()
-    try:
-        ok, details = loop.run_until_complete(
-            deep_check_nodriver(proxy_str, target, timeout=20)
-        )
-        return {"success": ok, **details}
-    finally:
-        loop.close()
-
-# ============================================================
 # Main Check Runner
 # ============================================================
 def run_check(session_id, proxies, rounds=None, target_profile=None, max_concurrent=None, token="default"):
@@ -1542,7 +1685,7 @@ def run_check(session_id, proxies, rounds=None, target_profile=None, max_concurr
                     s["done"] += 1
 
     async def run_async():
-        await check_engine.check_many_async(
+        await run_proxy_checks_with_optional_browser(
             proxies=proxies,
             stop_event=stop_event,
             rounds=rounds,
@@ -1709,9 +1852,10 @@ class Handler(SimpleHTTPRequestHandler):
             elif self.path == "/api/capabilities":
                 # Return server capabilities
                 self._json(200, {
-                    "nodriver": NODRIVER_AVAILABLE,
+                    "playwright": PLAYWRIGHT_AVAILABLE,
+                    "browser_check": BROWSER_CHECK_AVAILABLE,
+                    "deep_check": BROWSER_CHECK_AVAILABLE,
                     "xvfb": XVFB_AVAILABLE,
-                    "deep_check": NODRIVER_AVAILABLE,
                     "fetch_proxies": FETCH_PROXIES_AVAILABLE,
                     "target_profiles": list(TARGET_PROFILE_OPTIONS),
                     "max_concurrent": MAX_CONCURRENT,
@@ -1850,16 +1994,33 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json(200, {"ok": True})
 
             elif self.path == "/api/deep-check":
-                # Optional deep check using nodriver
+                # Optional deep check using Playwright Chromium
                 proxy = body.get("proxy", "")
                 if not proxy:
                     self._json(400, {"error": "proxy required"}); return
-                if not NODRIVER_AVAILABLE:
-                    self._json(200, {"success": False, "error": "nodriver not installed", "hint": "pip install nodriver"})
-                    return
-                target = body.get("target", TARGET_CHAT)
-                result = run_deep_check(proxy, target)
-                self._json(200, result)
+                target = normalize_optional_target_url(body.get("target", BROWSER_CHECK_TARGET_URL or TARGET_CHAT)) or TARGET_CHAT
+                config = build_browser_check_config(target)
+                config = BrowserCheckConfig(
+                    enabled=True,
+                    timeout=config.timeout,
+                    concurrent=1,
+                    target_url=target,
+                    wait_until=config.wait_until,
+                    settle_ms=config.settle_ms,
+                    min_body_length=config.min_body_length,
+                    success_text=config.success_text,
+                    fail_text=config.fail_text,
+                    screenshot_on_fail=config.screenshot_on_fail,
+                    strict=config.strict,
+                    max_failed_requests=config.max_failed_requests,
+                    max_bad_responses=config.max_bad_responses,
+                )
+                browser_result = run_browser_check_sync(proxy, config, target)
+                payload = browser_result.to_public_fields()
+                payload["success"] = browser_result.ready is True
+                if browser_result.error:
+                    payload["error"] = browser_result.error
+                self._json(200, payload)
 
             elif self.path == "/api/repo/save":
                 # Accept full repo data (JSON array of objects) or legacy proxy list
@@ -1988,7 +2149,7 @@ if __name__ == "__main__":
     start_auto_scheduler()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     log.info(f"Proxy Checker running at http://0.0.0.0:{PORT}")
-    log.info(f"Deep check (nodriver): {'available' if NODRIVER_AVAILABLE else 'not installed'}")
+    log.info(f"Browser check (Playwright): {'available' if BROWSER_CHECK_AVAILABLE else 'not installed'}")
     log.info(f"Concurrency: {MAX_CONCURRENT} | Rounds: {CHECK_ROUNDS}")
     log.info("Auto mode scheduler started")
     try:

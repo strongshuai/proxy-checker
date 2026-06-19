@@ -9,6 +9,27 @@
   "detect_timeout": 8,
   "run_log_limit": 100,
   "timezone": "UTC",
+  "generic_target_url": "https://example.com/",
   "port": 8888,
-  "log_file": "server.log"
+  "log_file": "server.log",
+  "browser_check_enabled": false,
+  "browser_check_timeout": 30,
+  "browser_check_concurrent": 3,
+  "browser_check_target_url": "",
+  "browser_check_wait_until": "domcontentloaded",
+  "browser_check_settle_ms": 3000,
+  "browser_check_min_body_length": 100,
+  "browser_check_success_text": [],
+  "browser_check_fail_text": [
+    "Just a moment",
+    "Checking your browser",
+    "Verify you are human",
+    "Access denied",
+    "cf-turnstile",
+    "challenge-platform"
+  ],
+  "browser_check_screenshot_on_fail": false,
+  "browser_check_strict": true,
+  "browser_check_max_failed_requests": 10,
+  "browser_check_max_bad_responses": 10
 }

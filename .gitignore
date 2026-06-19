@@ -20,3 +20,4 @@ patch_*.py
 fix_*.py
 *.bak2
 server.log
+.venv/
