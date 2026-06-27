@@ -7,6 +7,7 @@ import asyncio
 import logging
 import hashlib
 import hmac
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from http import cookies
 from http.server import HTTPServer
@@ -316,6 +317,10 @@ def repo_txt_path(token):
     return os.path.join(REPO_DIR, f"{sanitize_token(token)}.txt")
 
 
+def repo_exists(token):
+    return os.path.isfile(repo_json_path(token)) or os.path.isfile(repo_txt_path(token))
+
+
 def checked_txt_path(token):
     return os.path.join(CHECKED_DIR, f"{sanitize_token(token)}.txt")
 
@@ -361,6 +366,172 @@ def compact_repo(repo):
         seen.add(key)
         out.append(compact)
     return out
+
+
+def _query_items(query, *keys):
+    values = []
+    for key in keys:
+        raw_values = query.get(key)
+        if raw_values is None:
+            continue
+        if not isinstance(raw_values, list):
+            raw_values = [raw_values]
+        for raw_value in raw_values:
+            text = str(raw_value or "").strip()
+            if not text:
+                values.append("")
+                continue
+            for item in text.replace("，", ",").split(","):
+                value = item.strip()
+                if value:
+                    values.append(value)
+    return values
+
+
+def _parse_bool_filter(query, *keys):
+    values = _query_items(query, *keys)
+    if not values:
+        return None
+    truthy = {"", "1", "true", "yes", "y", "on", "ok", "reachable"}
+    falsy = {"0", "false", "no", "n", "off", "fail", "failed", "unreachable"}
+    neutral = {"all", "any", "*"}
+    for value in values:
+        lowered = str(value).strip().lower()
+        if lowered in neutral:
+            return None
+        if lowered in truthy:
+            return True
+        if lowered in falsy:
+            return False
+    return None
+
+
+def _parse_number_filter(query, *keys):
+    for value in _query_items(query, *keys):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _canonical_ip_type(value):
+    value = str(value or "").strip().lower().replace("-", "_")
+    aliases = {
+        "dc": "datacenter",
+        "data_center": "datacenter",
+        "hosting": "datacenter",
+        "server": "datacenter",
+        "res": "residential",
+        "home": "residential",
+    }
+    return aliases.get(value, value)
+
+
+def parse_repo_filter_query(query):
+    """Parse /api/repo query parameters into normalized filters."""
+    filters = {}
+
+    grades = {
+        str(value).strip().upper().replace("GRADE_", "").replace("等级", "")
+        for value in _query_items(query, "grade", "grades")
+    }
+    grades = {value for value in grades if value and value not in {"ALL", "ANY", "*"}}
+    if grades:
+        filters["grades"] = grades
+
+    boolean_filters = {
+        "service_reachable": ("service", "service_reachable", "service_ok"),
+        "api_reachable": ("api", "api_reachable", "api_ok"),
+        "cf_bypass": ("cf", "cf_bypass", "cf_ok"),
+    }
+    for field, keys in boolean_filters.items():
+        value = _parse_bool_filter(query, *keys)
+        if value is not None:
+            filters[field] = value
+
+    ip_types = {
+        _canonical_ip_type(value)
+        for value in _query_items(query, "ip_type", "type")
+    }
+    ip_types = {value for value in ip_types if value and value not in {"all", "any", "*"}}
+    if ip_types:
+        filters["ip_types"] = ip_types
+
+    country_values = _query_items(query, "country", "countries")
+    countries = set()
+    for value in country_values:
+        lowered = str(value).strip().lower()
+        if lowered in {"1", "true", "yes", "any", "all", "*"}:
+            filters["has_country"] = True
+            continue
+        if lowered:
+            countries.add(str(value).strip().upper())
+    if countries:
+        filters["countries"] = countries
+
+    target_profiles = {
+        str(value).strip().lower()
+        for value in _query_items(query, "target_profile", "profile")
+    }
+    target_profiles = {value for value in target_profiles if value and value not in {"all", "any", "*"}}
+    if target_profiles:
+        filters["target_profiles"] = target_profiles
+
+    recommended_uses = {
+        str(value).strip().lower()
+        for value in _query_items(query, "recommended_use", "use")
+    }
+    recommended_uses = {value for value in recommended_uses if value and value not in {"all", "any", "*"}}
+    if recommended_uses:
+        filters["recommended_uses"] = recommended_uses
+
+    max_latency = _parse_number_filter(query, "max_latency", "latency_lte", "latency_max")
+    if max_latency is not None:
+        filters["max_latency"] = max_latency
+
+    return filters
+
+
+def _repo_item_matches_filters(item, filters):
+    if "grades" in filters and str(item.get("grade") or "?").upper() not in filters["grades"]:
+        return False
+
+    for field in ("service_reachable", "api_reachable", "cf_bypass"):
+        if field in filters and (item.get(field) is True) != filters[field]:
+            return False
+
+    if "ip_types" in filters and _canonical_ip_type(item.get("ip_type")) not in filters["ip_types"]:
+        return False
+
+    country = str(item.get("country") or "").strip().upper()
+    if filters.get("has_country") and not country:
+        return False
+    if "countries" in filters and country not in filters["countries"]:
+        return False
+
+    if "target_profiles" in filters and str(item.get("target_profile") or "").strip().lower() not in filters["target_profiles"]:
+        return False
+
+    if "recommended_uses" in filters and str(item.get("recommended_use") or "").strip().lower() not in filters["recommended_uses"]:
+        return False
+
+    if "max_latency" in filters:
+        try:
+            latency = float(item.get("latency"))
+        except (TypeError, ValueError):
+            return False
+        if latency > filters["max_latency"]:
+            return False
+
+    return True
+
+
+def apply_repo_filters(repo, filters):
+    repo = compact_repo(repo)
+    if not filters:
+        return repo
+    return [item for item in repo if _repo_item_matches_filters(item, filters)]
 
 
 def read_repo_data(token):
@@ -1597,14 +1768,25 @@ from http.server import SimpleHTTPRequestHandler
 
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
-        path = self.path.split("?")[0]
+        parsed_url = urllib.parse.urlsplit(self.path)
+        path = parsed_url.path
+        query = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
+        repo_filters = parse_repo_filter_query(query)
 
         # Serve repo as txt: /api/repo/<token>.txt
         # Serve repo as JSON: /api/repo/<token>.json
         if path.startswith("/api/repo/") and path.endswith(".json"):
             token = path.split("/")[-1].replace(".json", "")
             json_file = os.path.join(REPO_DIR, f"{token}.json")
-            if os.path.isfile(json_file):
+            if repo_filters:
+                repo = apply_repo_filters(read_repo_data(token), repo_filters)
+                content = json.dumps(repo, ensure_ascii=False)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+            elif os.path.isfile(json_file):
                 with open(json_file, "r") as f:
                     content = f.read()
                 self.send_response(200)
@@ -1624,7 +1806,20 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/api/repo/") and path.endswith(".txt"):
             token = path.split("/")[-1].replace(".txt", "")
             repo_file = os.path.join(REPO_DIR, f"{token}.txt")
-            if os.path.isfile(repo_file):
+            if repo_filters:
+                if not repo_exists(token):
+                    self.send_response(404)
+                    self.end_headers()
+                    self.wfile.write(b"Repository not found")
+                    return
+                repo = apply_repo_filters(read_repo_data(token), repo_filters)
+                content = "\n".join(item["proxy"] for item in repo)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+            elif os.path.isfile(repo_file):
                 with open(repo_file, "r") as f:
                     content = f.read()
                 self.send_response(200)
